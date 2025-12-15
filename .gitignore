@@ -3,5 +3,9 @@ dist/
 .env
 uploads/*
 !uploads/.gitkeep
+data/
 *.log
 .DS_Store
+
+# Docker
+*.db

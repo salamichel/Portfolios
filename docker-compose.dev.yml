@@ -1,0 +1,39 @@
+services:
+  server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile.dev
+    container_name: portfolio-server-dev
+    environment:
+      - NODE_ENV=development
+      - PORT=3001
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+    volumes:
+      - ./server/src:/app/src
+      - ./data:/app/data
+      - ./uploads:/app/uploads
+    ports:
+      - "3001:3001"
+    networks:
+      - portfolio-network-dev
+
+  client:
+    build:
+      context: ./client
+      dockerfile: Dockerfile.dev
+    container_name: portfolio-client-dev
+    environment:
+      - VITE_API_URL=http://localhost:3001
+    volumes:
+      - ./client/src:/app/src
+      - ./client/index.html:/app/index.html
+    ports:
+      - "5173:5173"
+    depends_on:
+      - server
+    networks:
+      - portfolio-network-dev
+
+networks:
+  portfolio-network-dev:
+    driver: bridge
