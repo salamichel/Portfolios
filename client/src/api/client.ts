@@ -63,6 +63,7 @@ const getBaseName = (filename: string) => {
 
 // Use optimized WebP versions for better performance
 export const getImageUrl = (filename: string) => `/optimized/${getBaseName(filename)}.webp`;
+export const getMediumImageUrl = (filename: string) => `/medium/medium_${getBaseName(filename)}.webp`;
 export const getThumbnailUrl = (filename: string) => `/thumbnails/thumb_${getBaseName(filename)}.webp`;
 
 // Keep original URLs available if needed

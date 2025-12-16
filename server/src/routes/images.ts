@@ -13,10 +13,11 @@ const router = Router();
 const BASE_DIR = process.env.BASE_DIR || process.cwd();
 const uploadsDir = path.join(BASE_DIR, 'uploads');
 const thumbnailsDir = path.join(uploadsDir, 'thumbnails');
+const mediumDir = path.join(uploadsDir, 'medium');
 const optimizedDir = path.join(uploadsDir, 'optimized');
 
 // Ensure directories exist
-[uploadsDir, thumbnailsDir, optimizedDir].forEach(dir => {
+[uploadsDir, thumbnailsDir, mediumDir, optimizedDir].forEach(dir => {
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
@@ -101,13 +102,20 @@ router.post('/upload', upload.array('images', 50), async (req, res) => {
       // Get image dimensions
       const metadata = await sharp(imagePath).metadata();
 
-      // Generate WebP thumbnail (optimized)
+      // Generate WebP thumbnail for gallery (400px)
       const baseName = path.basename(file.filename, path.extname(file.filename));
       const thumbnailFilename = `thumb_${baseName}.webp`;
       await sharp(imagePath)
         .resize(400, 400, { fit: 'cover' })
         .webp({ quality: 80 })
         .toFile(path.join(thumbnailsDir, thumbnailFilename));
+
+      // Generate medium WebP for detail view (1024px)
+      const mediumFilename = `medium_${baseName}.webp`;
+      await sharp(imagePath)
+        .resize(1024, 1024, { fit: 'inside', withoutEnlargement: true })
+        .webp({ quality: 85 })
+        .toFile(path.join(mediumDir, mediumFilename));
 
       // Generate optimized WebP version of the full image
       const optimizedFilename = `${baseName}.webp`;
@@ -236,10 +244,12 @@ router.delete('/:id', (req, res) => {
     const baseName = path.basename(image.filename, path.extname(image.filename));
     const imagePath = path.join(uploadsDir, image.filename);
     const thumbnailPath = path.join(thumbnailsDir, `thumb_${baseName}.webp`);
+    const mediumPath = path.join(mediumDir, `medium_${baseName}.webp`);
     const optimizedPath = path.join(optimizedDir, `${baseName}.webp`);
 
     if (fs.existsSync(imagePath)) fs.unlinkSync(imagePath);
     if (fs.existsSync(thumbnailPath)) fs.unlinkSync(thumbnailPath);
+    if (fs.existsSync(mediumPath)) fs.unlinkSync(mediumPath);
     if (fs.existsSync(optimizedPath)) fs.unlinkSync(optimizedPath);
 
     imageDb.delete(req.params.id);

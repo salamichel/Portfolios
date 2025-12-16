@@ -10,6 +10,7 @@ export default defineConfig({
       '/api': 'http://localhost:3001',
       '/uploads': 'http://localhost:3001',
       '/thumbnails': 'http://localhost:3001',
+      '/medium': 'http://localhost:3001',
       '/optimized': 'http://localhost:3001'
     }
   }

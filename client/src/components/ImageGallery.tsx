@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Loader2, Sparkles, Trash2, X, ChevronLeft, ChevronRight, Tag } from 'lucide-react';
-import { imagesApi, getImageUrl, getThumbnailUrl } from '../api/client';
+import { imagesApi, getMediumImageUrl, getThumbnailUrl } from '../api/client';
 import type { Image, Theme } from '../types';
 
 interface ImageGalleryProps {
@@ -229,7 +229,7 @@ export function ImageGallery({ themeId, themes, searchQuery, onImageUpdate }: Im
             onClick={(e) => e.stopPropagation()}
           >
             <img
-              src={getImageUrl(selectedImage.filename)}
+              src={getMediumImageUrl(selectedImage.filename)}
               alt={selectedImage.title || selectedImage.original_name}
               className="max-w-full max-h-full object-contain"
             />
