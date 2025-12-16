@@ -33,9 +33,10 @@ export function DropZone({ themes, onUploadComplete }: DropZoneProps) {
       'image/jpeg': ['.jpg', '.jpeg'],
       'image/png': ['.png'],
       'image/gif': ['.gif'],
-      'image/webp': ['.webp']
+      'image/webp': ['.webp'],
+      'image/tiff': ['.tif', '.tiff']
     },
-    maxSize: 50 * 1024 * 1024
+    maxSize: 200 * 1024 * 1024
   });
 
   const removeFile = (index: number) => {
@@ -94,7 +95,7 @@ export function DropZone({ themes, onUploadComplete }: DropZoneProps) {
           {isDragActive ? 'Déposez les images ici...' : 'Glissez-déposez vos images ici'}
         </p>
         <p className="text-gray-400 mt-2">ou cliquez pour sélectionner</p>
-        <p className="text-sm text-gray-500 mt-4">JPEG, PNG, GIF, WebP • Max 50MB</p>
+        <p className="text-sm text-gray-500 mt-4">JPEG, PNG, GIF, WebP, TIFF • Max 200MB</p>
       </div>
 
       {/* Options */}
