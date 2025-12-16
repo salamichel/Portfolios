@@ -51,14 +51,48 @@ router.post('/', (req, res) => {
   }
 });
 
+// Reorder themes
+router.put('/reorder', (req, res) => {
+  try {
+    const { orderedIds } = req.body;
+
+    if (!Array.isArray(orderedIds) || orderedIds.length === 0) {
+      return res.status(400).json({ error: 'orderedIds array is required' });
+    }
+
+    themeDb.reorder(orderedIds);
+    const themes = themeDb.getAll();
+    res.json(themes);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to reorder themes' });
+  }
+});
+
+// Bulk delete themes
+router.delete('/bulk', (req, res) => {
+  try {
+    const { ids } = req.body;
+
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'ids array is required' });
+    }
+
+    const deleted = themeDb.bulkDelete(ids);
+    res.json({ deleted });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to delete themes' });
+  }
+});
+
 // Update theme
 router.put('/:id', (req, res) => {
   try {
-    const { name, description, cover_image_id } = req.body;
+    const { name, description, cover_image_id, position } = req.body;
     const theme = themeDb.update(req.params.id, {
       name: name?.trim(),
       description: description?.trim(),
-      cover_image_id
+      cover_image_id,
+      position
     });
 
     if (!theme) {

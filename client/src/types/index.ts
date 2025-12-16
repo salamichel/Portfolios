@@ -3,6 +3,7 @@ export interface Theme {
   name: string;
   description: string | null;
   cover_image_id: string | null;
+  position: number;
   created_at: string;
   updated_at: string;
   image_count?: number;
