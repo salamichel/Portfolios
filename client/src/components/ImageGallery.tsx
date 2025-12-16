@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Loader2, Sparkles, Trash2, X, ChevronLeft, ChevronRight, Tag, Pencil, Save, XCircle } from 'lucide-react';
+import { Loader2, Sparkles, Trash2, X, ChevronLeft, ChevronRight, Tag, Pencil, Save, XCircle, Info } from 'lucide-react';
 import { imagesApi, getMediumImageUrl, getThumbnailUrl } from '../api/client';
 import type { Image, Theme } from '../types';
 
@@ -27,6 +27,7 @@ export function ImageGallery({ themeId, themes, searchQuery, onImageUpdate }: Im
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState<EditFormData>({ title: '', description: '', mood: '', tags: '' });
   const [saving, setSaving] = useState(false);
+  const [showMobileDetails, setShowMobileDetails] = useState(false);
   const observerRef = useRef<IntersectionObserver | null>(null);
   const loadMoreRef = useRef<HTMLDivElement>(null);
 
@@ -184,6 +185,7 @@ export function ImageGallery({ themeId, themes, searchQuery, onImageUpdate }: Im
       if (isEditing) {
         cancelEditing();
       }
+      setShowMobileDetails(false);
       setSelectedImage(images[newIndex]);
     }
   };
@@ -192,6 +194,7 @@ export function ImageGallery({ themeId, themes, searchQuery, onImageUpdate }: Im
     if (isEditing) {
       cancelEditing();
     }
+    setShowMobileDetails(false);
     setSelectedImage(null);
   };
 
@@ -262,37 +265,38 @@ export function ImageGallery({ themeId, themes, searchQuery, onImageUpdate }: Im
       {/* Lightbox */}
       {selectedImage && (
         <div
-          className="fixed inset-0 z-50 bg-black/95 flex"
+          className="fixed inset-0 z-50 bg-black/95 flex flex-col md:flex-row"
           onClick={closeLightbox}
         >
-          {/* Navigation */}
+          {/* Navigation - Previous */}
           <button
             onClick={(e) => { e.stopPropagation(); navigateImage('prev'); }}
-            className="absolute left-4 top-1/2 -translate-y-1/2 p-2 bg-white/10 hover:bg-white/20 rounded-full transition-colors z-10"
+            className="absolute left-2 md:left-4 top-1/2 -translate-y-1/2 p-2 bg-white/10 hover:bg-white/20 rounded-full transition-colors z-20"
             disabled={images.findIndex(i => i.id === selectedImage.id) === 0}
           >
-            <ChevronLeft className="w-8 h-8" />
+            <ChevronLeft className="w-6 h-6 md:w-8 md:h-8" />
           </button>
 
+          {/* Navigation - Next */}
           <button
             onClick={(e) => { e.stopPropagation(); navigateImage('next'); }}
-            className="absolute right-4 top-1/2 -translate-y-1/2 p-2 bg-white/10 hover:bg-white/20 rounded-full transition-colors z-10 md:right-[340px]"
+            className="absolute right-2 md:right-[340px] top-1/2 -translate-y-1/2 p-2 bg-white/10 hover:bg-white/20 rounded-full transition-colors z-20"
             disabled={images.findIndex(i => i.id === selectedImage.id) === images.length - 1}
           >
-            <ChevronRight className="w-8 h-8" />
+            <ChevronRight className="w-6 h-6 md:w-8 md:h-8" />
           </button>
 
           {/* Close button */}
           <button
             onClick={closeLightbox}
-            className="absolute top-4 right-4 p-2 bg-white/10 hover:bg-white/20 rounded-full transition-colors z-10 md:right-[340px]"
+            className="absolute top-4 right-4 md:right-[340px] p-2 bg-white/10 hover:bg-white/20 rounded-full transition-colors z-20"
           >
             <X className="w-6 h-6" />
           </button>
 
-          {/* Image */}
+          {/* Image container - centered properly */}
           <div
-            className="flex-1 flex items-center justify-center p-4 md:pr-[320px]"
+            className="flex-1 flex items-center justify-center p-4 pb-20 md:pb-4"
             onClick={(e) => e.stopPropagation()}
           >
             <img
@@ -301,6 +305,229 @@ export function ImageGallery({ themeId, themes, searchQuery, onImageUpdate }: Im
               className="max-w-full max-h-full object-contain"
             />
           </div>
+
+          {/* Mobile bottom action bar */}
+          <div
+            className="md:hidden fixed bottom-0 left-0 right-0 bg-gray-900 border-t border-gray-800 px-4 py-3 flex items-center justify-around z-30"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => setShowMobileDetails(true)}
+              className="flex flex-col items-center gap-1 text-gray-300 hover:text-white"
+            >
+              <Info className="w-5 h-5" />
+              <span className="text-xs">Détails</span>
+            </button>
+
+            <button
+              onClick={() => startEditing(selectedImage)}
+              className="flex flex-col items-center gap-1 text-gray-300 hover:text-white"
+            >
+              <Pencil className="w-5 h-5" />
+              <span className="text-xs">Modifier</span>
+            </button>
+
+            {!selectedImage.ai_enriched && (
+              <button
+                onClick={() => handleEnrich(selectedImage)}
+                disabled={enriching === selectedImage.id}
+                className="flex flex-col items-center gap-1 text-amber-400 hover:text-amber-300"
+              >
+                {enriching === selectedImage.id ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <Sparkles className="w-5 h-5" />
+                )}
+                <span className="text-xs">Enrichir</span>
+              </button>
+            )}
+
+            <button
+              onClick={() => handleDelete(selectedImage)}
+              className="flex flex-col items-center gap-1 text-red-400 hover:text-red-300"
+            >
+              <Trash2 className="w-5 h-5" />
+              <span className="text-xs">Supprimer</span>
+            </button>
+          </div>
+
+          {/* Mobile details panel (slide-up) */}
+          {showMobileDetails && (
+            <div
+              className="md:hidden fixed inset-0 bg-black/50 z-40"
+              onClick={() => setShowMobileDetails(false)}
+            >
+              <div
+                className="absolute bottom-0 left-0 right-0 bg-gray-900 rounded-t-2xl p-6 max-h-[80vh] overflow-y-auto"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-lg font-semibold">Détails</h3>
+                  <button
+                    onClick={() => setShowMobileDetails(false)}
+                    className="p-1 text-gray-400 hover:text-white"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                {/* Filename */}
+                <div className="mb-3 pb-3 border-b border-gray-800">
+                  <span className="text-xs text-gray-500">Fichier (référence):</span>
+                  <p className="text-xs text-gray-400 truncate">{selectedImage.original_name}</p>
+                </div>
+
+                {/* Title */}
+                <h4 className="text-lg font-medium mb-2">
+                  {selectedImage.title || selectedImage.original_name}
+                </h4>
+
+                {/* Description */}
+                {selectedImage.description && (
+                  <p className="text-gray-300 mb-4">{selectedImage.description}</p>
+                )}
+
+                {/* Mood */}
+                {selectedImage.mood && (
+                  <div className="mb-4">
+                    <span className="text-sm text-gray-400">Ambiance:</span>
+                    <span className="ml-2 px-2 py-1 bg-gray-800 rounded text-sm">{selectedImage.mood}</span>
+                  </div>
+                )}
+
+                {/* Tags */}
+                {parseTags(selectedImage.tags).length > 0 && (
+                  <div className="mb-4">
+                    <div className="flex items-center gap-1 text-sm text-gray-400 mb-2">
+                      <Tag className="w-4 h-4" />
+                      Tags
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {parseTags(selectedImage.tags).map((tag, i) => (
+                        <span key={i} className="px-2 py-1 bg-gray-800 rounded-full text-xs">
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Theme selector */}
+                <div className="mb-4">
+                  <label className="block text-sm text-gray-400 mb-2">Thème</label>
+                  <select
+                    value={selectedImage.theme_id || ''}
+                    onChange={(e) => handleUpdateTheme(selectedImage, e.target.value || null)}
+                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2"
+                  >
+                    <option value="">Sans thème</option>
+                    {themes.map(theme => (
+                      <option key={theme.id} value={theme.id}>{theme.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Info */}
+                <div className="text-sm text-gray-400 space-y-1">
+                  <p>{selectedImage.width} × {selectedImage.height}px</p>
+                  <p>{(selectedImage.size / 1024 / 1024).toFixed(2)} MB</p>
+                  <p>{new Date(selectedImage.created_at).toLocaleDateString('fr-FR')}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Mobile edit panel (slide-up) */}
+          {isEditing && (
+            <div
+              className="md:hidden fixed inset-0 bg-black/50 z-40"
+              onClick={cancelEditing}
+            >
+              <div
+                className="absolute bottom-0 left-0 right-0 bg-gray-900 rounded-t-2xl p-6 max-h-[85vh] overflow-y-auto"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-lg font-semibold">Modifier les métadonnées</h3>
+                  <button
+                    onClick={cancelEditing}
+                    className="p-1 text-gray-400 hover:text-white"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm text-gray-400 mb-1">Titre</label>
+                    <input
+                      type="text"
+                      value={editForm.title}
+                      onChange={(e) => setEditForm(prev => ({ ...prev, title: e.target.value }))}
+                      className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white"
+                      placeholder="Titre de l'image"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm text-gray-400 mb-1">Description</label>
+                    <textarea
+                      value={editForm.description}
+                      onChange={(e) => setEditForm(prev => ({ ...prev, description: e.target.value }))}
+                      className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white resize-none"
+                      rows={3}
+                      placeholder="Description de l'image"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm text-gray-400 mb-1">Ambiance</label>
+                    <input
+                      type="text"
+                      value={editForm.mood}
+                      onChange={(e) => setEditForm(prev => ({ ...prev, mood: e.target.value }))}
+                      className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white"
+                      placeholder="Ex: Serein, Dramatique, Joyeux..."
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm text-gray-400 mb-1">Tags (séparés par virgule)</label>
+                    <input
+                      type="text"
+                      value={editForm.tags}
+                      onChange={(e) => setEditForm(prev => ({ ...prev, tags: e.target.value }))}
+                      className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white"
+                      placeholder="nature, paysage, été..."
+                    />
+                  </div>
+
+                  <div className="flex gap-2 pt-2">
+                    <button
+                      onClick={handleSaveMetadata}
+                      disabled={saving}
+                      className="flex-1 flex items-center justify-center gap-2 bg-green-500/20 hover:bg-green-500/30 text-green-400 py-3 px-4 rounded-lg transition-colors"
+                    >
+                      {saving ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Save className="w-4 h-4" />
+                      )}
+                      Sauvegarder
+                    </button>
+                    <button
+                      onClick={cancelEditing}
+                      disabled={saving}
+                      className="flex-1 flex items-center justify-center gap-2 bg-gray-700 hover:bg-gray-600 text-gray-300 py-3 px-4 rounded-lg transition-colors"
+                    >
+                      <XCircle className="w-4 h-4" />
+                      Annuler
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Sidebar */}
           <div
