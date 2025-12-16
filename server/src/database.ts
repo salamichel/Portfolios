@@ -1,13 +1,12 @@
 import Database from 'better-sqlite3';
 import path from 'path';
 import fs from 'fs';
-import { fileURLToPath } from 'url';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+// Base directory (works in both dev and Docker)
+const BASE_DIR = process.env.BASE_DIR || process.cwd();
+const dataDir = path.join(BASE_DIR, 'data');
 
 // Ensure data directory exists before opening database
-const dataDir = path.join(__dirname, '../../data');
 if (!fs.existsSync(dataDir)) {
   fs.mkdirSync(dataDir, { recursive: true });
 }
