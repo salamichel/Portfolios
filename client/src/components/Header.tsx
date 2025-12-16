@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Search, Upload, X, Camera } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Search, Upload, X, Camera, Settings } from 'lucide-react';
 
 interface HeaderProps {
   searchQuery: string;
@@ -51,6 +52,14 @@ export function Header({ searchQuery, onSearchChange, onUploadClick }: HeaderPro
           >
             <Search className="w-5 h-5" />
           </button>
+
+          <Link
+            to="/admin/themes"
+            className="p-2 hover:bg-gray-800 rounded-lg transition-colors"
+            title="Gérer les thèmes"
+          >
+            <Settings className="w-5 h-5" />
+          </Link>
 
           <button
             onClick={onUploadClick}

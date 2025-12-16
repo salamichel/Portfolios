@@ -21,6 +21,7 @@ db.exec(`
     name TEXT NOT NULL,
     description TEXT,
     cover_image_id TEXT,
+    position INTEGER DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
@@ -48,11 +49,24 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_images_created ON images(created_at);
 `);
 
+// Migration: Add position column if it doesn't exist (for existing databases)
+try {
+  db.exec(`ALTER TABLE themes ADD COLUMN position INTEGER DEFAULT 0`);
+  // Initialize positions based on current order
+  const themes = db.prepare('SELECT id FROM themes ORDER BY name').all() as { id: string }[];
+  themes.forEach((theme, index) => {
+    db.prepare('UPDATE themes SET position = ? WHERE id = ?').run(index, theme.id);
+  });
+} catch {
+  // Column already exists, ignore error
+}
+
 export interface Theme {
   id: string;
   name: string;
   description: string | null;
   cover_image_id: string | null;
+  position: number;
   created_at: string;
   updated_at: string;
   image_count?: number;
@@ -84,7 +98,7 @@ export const themeDb = {
       FROM themes t
       LEFT JOIN images i ON t.id = i.theme_id
       GROUP BY t.id
-      ORDER BY t.name
+      ORDER BY t.position, t.name
     `).all() as Theme[];
   },
 
@@ -92,11 +106,17 @@ export const themeDb = {
     return db.prepare('SELECT * FROM themes WHERE id = ?').get(id) as Theme | undefined;
   },
 
-  create(theme: Omit<Theme, 'created_at' | 'updated_at' | 'image_count'>): Theme {
+  getMaxPosition(): number {
+    const result = db.prepare('SELECT MAX(position) as max_pos FROM themes').get() as { max_pos: number | null };
+    return result.max_pos ?? -1;
+  },
+
+  create(theme: Omit<Theme, 'created_at' | 'updated_at' | 'image_count' | 'position'>): Theme {
+    const position = this.getMaxPosition() + 1;
     db.prepare(`
-      INSERT INTO themes (id, name, description, cover_image_id)
-      VALUES (?, ?, ?, ?)
-    `).run(theme.id, theme.name, theme.description, theme.cover_image_id);
+      INSERT INTO themes (id, name, description, cover_image_id, position)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(theme.id, theme.name, theme.description, theme.cover_image_id, position);
     return this.getById(theme.id)!;
   },
 
@@ -107,6 +127,7 @@ export const themeDb = {
     if (data.name !== undefined) { fields.push('name = ?'); values.push(data.name); }
     if (data.description !== undefined) { fields.push('description = ?'); values.push(data.description); }
     if (data.cover_image_id !== undefined) { fields.push('cover_image_id = ?'); values.push(data.cover_image_id); }
+    if (data.position !== undefined) { fields.push('position = ?'); values.push(data.position); }
 
     if (fields.length === 0) return this.getById(id);
 
@@ -117,9 +138,25 @@ export const themeDb = {
     return this.getById(id);
   },
 
+  reorder(orderedIds: string[]): void {
+    const stmt = db.prepare('UPDATE themes SET position = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?');
+    const transaction = db.transaction((ids: string[]) => {
+      ids.forEach((id, index) => {
+        stmt.run(index, id);
+      });
+    });
+    transaction(orderedIds);
+  },
+
   delete(id: string): boolean {
     const result = db.prepare('DELETE FROM themes WHERE id = ?').run(id);
     return result.changes > 0;
+  },
+
+  bulkDelete(ids: string[]): number {
+    const placeholders = ids.map(() => '?').join(',');
+    const result = db.prepare(`DELETE FROM themes WHERE id IN (${placeholders})`).run(...ids);
+    return result.changes;
   }
 };
 

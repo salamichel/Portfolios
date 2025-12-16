@@ -17,7 +17,13 @@ export const themesApi = {
   update: (id: string, data: Partial<Theme>) =>
     api.put<Theme>(`/themes/${id}`, data).then(res => res.data),
 
-  delete: (id: string) => api.delete(`/themes/${id}`)
+  delete: (id: string) => api.delete(`/themes/${id}`),
+
+  reorder: (orderedIds: string[]) =>
+    api.put<Theme[]>('/themes/reorder', { orderedIds }).then(res => res.data),
+
+  bulkDelete: (ids: string[]) =>
+    api.delete<{ deleted: number }>('/themes/bulk', { data: { ids } }).then(res => res.data)
 };
 
 // Images API
