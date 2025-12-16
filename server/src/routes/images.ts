@@ -34,17 +34,20 @@ const storage = multer.diskStorage({
   }
 });
 
+// Heavy formats that will be deleted after WebP conversion
+const HEAVY_FORMATS = ['image/tiff'];
+
 const upload = multer({
   storage,
   limits: {
-    fileSize: 50 * 1024 * 1024 // 50MB limit
+    fileSize: 200 * 1024 * 1024 // 200MB limit (for large TIFF files)
   },
   fileFilter: (req, file, cb) => {
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/tiff'];
     if (allowedTypes.includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error('Invalid file type. Only JPEG, PNG, GIF, and WebP are allowed.'));
+      cb(new Error('Invalid file type. Only JPEG, PNG, GIF, WebP, and TIFF are allowed.'));
     }
   }
 });
@@ -134,6 +137,13 @@ router.post('/upload', upload.array('images', 50), async (req, res) => {
         } catch (err) {
           console.error('Failed to enrich image with Gemini:', err);
         }
+      }
+
+      // Delete heavy format files (like TIFF) after conversion to save space
+      const isHeavyFormat = HEAVY_FORMATS.includes(file.mimetype);
+      if (isHeavyFormat && fs.existsSync(imagePath)) {
+        fs.unlinkSync(imagePath);
+        console.log(`Deleted heavy format file: ${file.filename}`);
       }
 
       const image = imageDb.create({
