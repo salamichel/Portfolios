@@ -13,17 +13,17 @@ export interface ImageAnalysis {
 
 export async function analyzeImage(imagePath: string): Promise<ImageAnalysis> {
   try {
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-lite' });
 
     const imageBuffer = fs.readFileSync(imagePath);
     const base64Image = imageBuffer.toString('base64');
     const mimeType = getMimeType(imagePath);
 
-    const prompt = `Analyze this artistic/photography image and provide:
-1. A creative, evocative title (max 10 words)
-2. An artistic description that captures the mood, composition, and artistic elements (2-3 sentences)
-3. Relevant tags for categorization (5-10 tags)
-4. The overall mood/atmosphere (one or two words like "serene", "dramatic", "melancholic", etc.)
+    const prompt = `Analysez cette image artistique/photographie et fournissez :
+1. Un titre créatif et évocateur (max 10 mots)
+2. Une description artistique qui capture l'ambiance, la composition et les éléments artistiques (2 à 3 phrases)
+3. Des mots-clés pertinents pour la catégorisation (5 à 10 tags)
+4. L'ambiance/atmosphère générale (un ou deux mots comme « serein », « dramatique », « mélancolique », etc.)
 
 Respond in JSON format exactly like this:
 {

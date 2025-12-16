@@ -1,7 +1,17 @@
 import Database from 'better-sqlite3';
 import path from 'path';
+import fs from 'fs';
 
-const dbPath = path.join(__dirname, '../../data/portfolio.db');
+// Base directory (works in both dev and Docker)
+const BASE_DIR = process.env.BASE_DIR || process.cwd();
+const dataDir = path.join(BASE_DIR, 'data');
+
+// Ensure data directory exists before opening database
+if (!fs.existsSync(dataDir)) {
+  fs.mkdirSync(dataDir, { recursive: true });
+}
+
+const dbPath = path.join(dataDir, 'portfolio.db');
 const db = new Database(dbPath);
 
 // Initialize database tables

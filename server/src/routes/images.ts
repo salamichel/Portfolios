@@ -9,7 +9,9 @@ import { analyzeImage } from '../services/gemini.js';
 
 const router = Router();
 
-const uploadsDir = path.join(__dirname, '../../../uploads');
+// Base directory (works in both dev and Docker)
+const BASE_DIR = process.env.BASE_DIR || process.cwd();
+const uploadsDir = path.join(BASE_DIR, 'uploads');
 const thumbnailsDir = path.join(uploadsDir, 'thumbnails');
 
 // Ensure directories exist

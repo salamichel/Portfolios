@@ -9,19 +9,26 @@ import imagesRouter from './routes/images.js';
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Ensure data directory exists
-const dataDir = path.join(__dirname, '../../data');
-if (!fs.existsSync(dataDir)) {
-  fs.mkdirSync(dataDir, { recursive: true });
-}
+// Base directory (works in both dev and Docker)
+const BASE_DIR = process.env.BASE_DIR || process.cwd();
+const uploadsDir = path.join(BASE_DIR, 'uploads');
+const thumbnailsDir = path.join(uploadsDir, 'thumbnails');
+const dataDir = path.join(BASE_DIR, 'data');
+
+// Ensure directories exist
+[uploadsDir, thumbnailsDir, dataDir].forEach(dir => {
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+});
 
 // Middleware
 app.use(cors());
 app.use(express.json());
 
 // Serve uploaded images statically
-app.use('/uploads', express.static(path.join(__dirname, '../../uploads')));
-app.use('/thumbnails', express.static(path.join(__dirname, '../../uploads/thumbnails')));
+app.use('/uploads', express.static(uploadsDir));
+app.use('/thumbnails', express.static(thumbnailsDir));
 
 // API Routes
 app.use('/api/themes', themesRouter);
