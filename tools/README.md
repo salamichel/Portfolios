@@ -1,9 +1,14 @@
 # Theme Uploader Tool
 
-Outil Python pour uploader des thèmes (dossiers d'images) vers l'application Portfolio.
+Outil Python pour créer des thèmes sur l'application Portfolio à partir de dossiers locaux.
 
 ## Installation
 
+```bash
+pip install requests
+```
+
+Ou avec le fichier requirements.txt :
 ```bash
 cd tools
 pip install -r requirements.txt
@@ -51,30 +56,37 @@ Si aucun fichier de métadonnées n'est présent, le nom du dossier est utilisé
 ### Usage de base
 
 ```bash
-# Uploader tous les thèmes d'un dossier
+# Créer tous les thèmes (sans upload d'images)
 python theme_uploader.py /chemin/vers/mes_themes
 
 # Avec affichage détaillé
 python theme_uploader.py /chemin/vers/mes_themes -v
+
+# Ignorer les thèmes qui existent déjà
+python theme_uploader.py /chemin/vers/mes_themes --skip-existing
 ```
 
-### Options avancées
+### Upload d'images (optionnel)
 
 ```bash
-# Spécifier une URL d'API différente
-python theme_uploader.py ./themes --api-url http://mon-serveur:3001/api
+# Créer les thèmes ET uploader les images
+python theme_uploader.py ./themes --upload-images
 
-# Activer l'enrichissement AI (Gemini)
-python theme_uploader.py ./themes --auto-enrich
+# Avec enrichissement AI (Gemini)
+python theme_uploader.py ./themes --upload-images --auto-enrich -v
+```
+
+### Autres options
+
+```bash
+# Spécifier une URL d'API différente (ex: serveur local)
+python theme_uploader.py ./themes --api-url http://localhost:3001/api
 
 # Simulation (voir ce qui serait fait sans rien créer)
 python theme_uploader.py ./themes --dry-run
 
-# Uploader un seul thème
+# Traiter un seul thème
 python theme_uploader.py ./themes --single "Paysages"
-
-# Ignorer les thèmes qui existent déjà
-python theme_uploader.py ./themes --skip-existing
 ```
 
 ### Toutes les options
@@ -82,10 +94,11 @@ python theme_uploader.py ./themes --skip-existing
 | Option | Description |
 |--------|-------------|
 | `themes_folder` | Dossier contenant les sous-dossiers de thèmes (obligatoire) |
-| `--api-url` | URL de l'API (défaut: `http://localhost:3001/api`) |
-| `--auto-enrich` | Activer l'enrichissement Gemini AI pour les images |
+| `--api-url` | URL de l'API (défaut: `https://portfolio.moka-web.net/api`) |
+| `--upload-images` | Uploader également les images (désactivé par défaut) |
+| `--auto-enrich` | Activer l'enrichissement Gemini AI (nécessite --upload-images) |
 | `--dry-run` | Simuler sans créer/uploader |
-| `--single THEME` | Uploader uniquement le thème spécifié |
+| `--single THEME` | Traiter uniquement le thème spécifié |
 | `--skip-existing` | Ignorer les thèmes déjà existants |
 | `-v, --verbose` | Affichage détaillé |
 
@@ -98,10 +111,16 @@ python theme_uploader.py ./themes --skip-existing
 
 ## Exemples
 
-### Uploader avec enrichissement AI
+### Créer des thèmes sur le serveur distant
 
 ```bash
-python theme_uploader.py ~/Photos/themes --auto-enrich -v
+python theme_uploader.py ~/Photos/themes
+```
+
+### Créer des thèmes sur un serveur local
+
+```bash
+python theme_uploader.py ~/Photos/themes --api-url http://localhost:3001/api
 ```
 
 ### Tester avant d'exécuter
@@ -113,11 +132,11 @@ python theme_uploader.py ~/Photos/themes --dry-run -v
 ### Ajouter de nouveaux thèmes sans doublons
 
 ```bash
-python theme_uploader.py ~/Photos/themes --skip-existing -v
+python theme_uploader.py ~/Photos/themes --skip-existing
 ```
 
 ## Prérequis
 
 - Python 3.10+
-- Le serveur Portfolio doit être démarré (`npm run dev` ou Docker)
-- Connexion réseau vers l'API
+- Module `requests` installé
+- Connexion réseau vers l'API Portfolio

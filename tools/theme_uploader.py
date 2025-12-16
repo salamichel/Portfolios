@@ -3,7 +3,10 @@
 Theme Uploader Tool
 
 Parcourt un dossier contenant des thèmes (sous-dossiers) et les crée en ligne
-via l'API Portfolio, avec toutes leurs images.
+via l'API Portfolio.
+
+Par défaut, seuls les thèmes sont créés (sans upload d'images).
+Utilisez --upload-images pour également uploader les images.
 
 Structure attendue:
     themes_folder/
@@ -23,17 +26,24 @@ Fichiers de métadonnées optionnels:
 
 import argparse
 import json
-import os
 import sys
 from pathlib import Path
 from typing import Optional
 from dataclasses import dataclass
 
-import requests
-from tqdm import tqdm
+# Vérifier les dépendances
+try:
+    import requests
+except ImportError:
+    print("Erreur: Le module 'requests' n'est pas installé.")
+    print("Installez-le avec: pip install requests")
+    sys.exit(1)
 
 # Extensions d'images supportées
 SUPPORTED_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.gif', '.webp'}
+
+# URL par défaut du serveur
+DEFAULT_API_URL = 'https://portfolio.moka-web.net/api'
 
 
 @dataclass
@@ -47,14 +57,16 @@ class ThemeConfig:
 def parse_args():
     """Parse les arguments de la ligne de commande."""
     parser = argparse.ArgumentParser(
-        description="Upload de thèmes (dossiers d'images) vers l'API Portfolio",
+        description="Création de thèmes via l'API Portfolio",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
+        epilog=f"""
 Exemples:
   %(prog)s /chemin/vers/mes/themes
   %(prog)s ./themes --api-url http://localhost:3001/api
-  %(prog)s ./themes --auto-enrich --dry-run
-  %(prog)s ./themes --single MonTheme
+  %(prog)s ./themes --upload-images --auto-enrich
+  %(prog)s ./themes --single MonTheme --dry-run
+
+URL par défaut: {DEFAULT_API_URL}
         """
     )
 
@@ -67,14 +79,20 @@ Exemples:
     parser.add_argument(
         '--api-url',
         type=str,
-        default='http://localhost:3001/api',
-        help='URL de base de l\'API (défaut: http://localhost:3001/api)'
+        default=DEFAULT_API_URL,
+        help=f'URL de base de l\'API (défaut: {DEFAULT_API_URL})'
+    )
+
+    parser.add_argument(
+        '--upload-images',
+        action='store_true',
+        help='Uploader également les images des thèmes (désactivé par défaut)'
     )
 
     parser.add_argument(
         '--auto-enrich',
         action='store_true',
-        help='Activer l\'enrichissement automatique via Gemini AI'
+        help='Activer l\'enrichissement automatique via Gemini AI (nécessite --upload-images)'
     )
 
     parser.add_argument(
@@ -87,7 +105,7 @@ Exemples:
         '--single',
         type=str,
         metavar='THEME_NAME',
-        help='Uploader uniquement le thème spécifié'
+        help='Traiter uniquement le thème spécifié'
     )
 
     parser.add_argument(
@@ -257,17 +275,24 @@ def upload_images_batch(
     success_count = 0
     fail_count = 0
 
-    progress_bar = tqdm(images, desc="    Images", unit="img", disable=not verbose)
+    total = len(images)
+    for i, image_path in enumerate(images, 1):
+        if verbose:
+            print(f"    [{i}/{total}] {image_path.name}", end="")
 
-    for image_path in progress_bar:
         if dry_run:
-            progress_bar.set_postfix_str(f"[DRY-RUN] {image_path.name}")
+            if verbose:
+                print(" [DRY-RUN]")
             success_count += 1
         else:
             if upload_image(api_url, image_path, theme_id, auto_enrich, dry_run):
                 success_count += 1
+                if verbose:
+                    print(" OK")
             else:
                 fail_count += 1
+                if verbose:
+                    print(" ERREUR")
 
     return success_count, fail_count
 
@@ -296,6 +321,7 @@ def discover_themes(themes_folder: Path, single: Optional[str] = None) -> list[P
 def process_theme(
     folder_path: Path,
     api_url: str,
+    upload_images: bool = False,
     auto_enrich: bool = False,
     dry_run: bool = False,
     skip_existing: bool = False,
@@ -311,6 +337,7 @@ def process_theme(
         'skipped': False,
         'images_uploaded': 0,
         'images_failed': 0,
+        'images_count': 0,
         'error': None
     }
 
@@ -318,24 +345,21 @@ def process_theme(
     config = get_theme_config(folder_path)
     stats['name'] = config.name
 
-    log(f"\nThème: {config.name}", verbose)
-    if config.description:
-        log(f"  Description: {config.description[:50]}...", verbose)
-
-    # Lister les images
+    # Lister les images (pour info)
     images = get_image_files(folder_path)
-    log(f"  Images trouvées: {len(images)}", verbose)
+    stats['images_count'] = len(images)
 
-    if not images:
-        log("  Aucune image, thème ignoré", verbose)
-        stats['skipped'] = True
-        return stats
+    print(f"\nThème: {config.name}")
+    if config.description:
+        desc_preview = config.description[:50] + "..." if len(config.description) > 50 else config.description
+        log(f"  Description: {desc_preview}", verbose)
+    log(f"  Images dans le dossier: {len(images)}", verbose)
 
     # Vérifier si le thème existe
     if skip_existing:
         existing_id = check_theme_exists(api_url, config.name)
         if existing_id:
-            log(f"  Thème existant (ID: {existing_id}), ignoré", verbose)
+            print(f"  -> Thème existant (ID: {existing_id}), ignoré")
             stats['skipped'] = True
             return stats
 
@@ -346,14 +370,17 @@ def process_theme(
         return stats
 
     stats['created'] = True
-    log(f"  Thème créé (ID: {theme_id})", verbose)
+    print(f"  -> Thème créé (ID: {theme_id})")
 
-    # Uploader les images
-    success, fail = upload_images_batch(
-        api_url, images, theme_id, auto_enrich, dry_run, verbose
-    )
-    stats['images_uploaded'] = success
-    stats['images_failed'] = fail
+    # Uploader les images si demandé
+    if upload_images and images:
+        log(f"  Upload des images...", verbose)
+        success, fail = upload_images_batch(
+            api_url, images, theme_id, auto_enrich, dry_run, verbose
+        )
+        stats['images_uploaded'] = success
+        stats['images_failed'] = fail
+        print(f"  -> Images: {success} OK, {fail} erreurs")
 
     return stats
 
@@ -362,35 +389,46 @@ def main():
     """Point d'entrée principal."""
     args = parse_args()
 
-    print(f"=== Theme Uploader ===")
+    print("=== Theme Uploader ===")
     print(f"Dossier source: {args.themes_folder}")
     print(f"API URL: {args.api_url}")
 
     if args.dry_run:
         print("Mode: DRY-RUN (simulation)")
-    if args.auto_enrich:
-        print("Enrichissement AI: Activé")
+    if args.upload_images:
+        print("Upload images: Activé")
+        if args.auto_enrich:
+            print("Enrichissement AI: Activé")
+    else:
+        print("Upload images: Désactivé (utilisez --upload-images pour activer)")
     if args.skip_existing:
         print("Skip existing: Activé")
 
+    # Avertissement si auto-enrich sans upload-images
+    if args.auto_enrich and not args.upload_images:
+        print("\nAvertissement: --auto-enrich n'a pas d'effet sans --upload-images")
+
     # Vérifier la connexion à l'API
+    print("\nConnexion à l'API...", end=" ")
     try:
-        response = requests.get(f"{args.api_url}/themes", timeout=5)
+        response = requests.get(f"{args.api_url}/themes", timeout=10)
         response.raise_for_status()
-        print(f"Connexion API: OK")
+        existing_themes = response.json()
+        print(f"OK ({len(existing_themes)} thèmes existants)")
     except requests.RequestException as e:
-        print(f"Erreur: Impossible de se connecter à l'API: {e}")
-        print("Assurez-vous que le serveur est démarré.")
+        print(f"ERREUR")
+        print(f"\nImpossible de se connecter à l'API: {e}")
+        print(f"Vérifiez que l'URL est correcte: {args.api_url}")
         sys.exit(1)
 
     # Découvrir les thèmes
     try:
         theme_folders = discover_themes(args.themes_folder, args.single)
     except ValueError as e:
-        print(f"Erreur: {e}")
+        print(f"\nErreur: {e}")
         sys.exit(1)
 
-    print(f"\nThèmes découverts: {len(theme_folders)}")
+    print(f"\nThèmes à traiter: {len(theme_folders)}")
 
     # Traiter chaque thème
     all_stats = []
@@ -399,6 +437,7 @@ def main():
         stats = process_theme(
             folder,
             args.api_url,
+            args.upload_images,
             args.auto_enrich,
             args.dry_run,
             args.skip_existing,
@@ -414,14 +453,16 @@ def main():
     total_created = sum(1 for s in all_stats if s['created'])
     total_skipped = sum(1 for s in all_stats if s['skipped'])
     total_errors = sum(1 for s in all_stats if s['error'])
-    total_images = sum(s['images_uploaded'] for s in all_stats)
-    total_failed = sum(s['images_failed'] for s in all_stats)
 
     print(f"Thèmes créés: {total_created}")
     print(f"Thèmes ignorés: {total_skipped}")
     print(f"Erreurs: {total_errors}")
-    print(f"Images uploadées: {total_images}")
-    print(f"Images échouées: {total_failed}")
+
+    if args.upload_images:
+        total_images = sum(s['images_uploaded'] for s in all_stats)
+        total_failed = sum(s['images_failed'] for s in all_stats)
+        print(f"Images uploadées: {total_images}")
+        print(f"Images échouées: {total_failed}")
 
     if total_errors > 0:
         print("\nDétails des erreurs:")
@@ -430,8 +471,12 @@ def main():
                 print(f"  - {stats['name']}: {stats['error']}")
 
     # Code de sortie
-    if total_errors > 0 or total_failed > 0:
+    if total_errors > 0:
         sys.exit(1)
+    if args.upload_images:
+        total_failed = sum(s['images_failed'] for s in all_stats)
+        if total_failed > 0:
+            sys.exit(1)
 
     print("\nTerminé!")
 
