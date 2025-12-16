@@ -55,5 +55,16 @@ export const imagesApi = {
   delete: (id: string) => api.delete(`/images/${id}`)
 };
 
-export const getImageUrl = (filename: string) => `/uploads/${filename}`;
-export const getThumbnailUrl = (filename: string) => `/thumbnails/thumb_${filename}`;
+// Helper to get the base name without extension
+const getBaseName = (filename: string) => {
+  const lastDot = filename.lastIndexOf('.');
+  return lastDot > 0 ? filename.substring(0, lastDot) : filename;
+};
+
+// Use optimized WebP versions for better performance
+export const getImageUrl = (filename: string) => `/optimized/${getBaseName(filename)}.webp`;
+export const getMediumImageUrl = (filename: string) => `/medium/medium_${getBaseName(filename)}.webp`;
+export const getThumbnailUrl = (filename: string) => `/thumbnails/thumb_${getBaseName(filename)}.webp`;
+
+// Keep original URLs available if needed
+export const getOriginalImageUrl = (filename: string) => `/uploads/${filename}`;

@@ -13,10 +13,12 @@ const PORT = process.env.PORT || 3001;
 const BASE_DIR = process.env.BASE_DIR || process.cwd();
 const uploadsDir = path.join(BASE_DIR, 'uploads');
 const thumbnailsDir = path.join(uploadsDir, 'thumbnails');
+const mediumDir = path.join(uploadsDir, 'medium');
+const optimizedDir = path.join(uploadsDir, 'optimized');
 const dataDir = path.join(BASE_DIR, 'data');
 
 // Ensure directories exist
-[uploadsDir, thumbnailsDir, dataDir].forEach(dir => {
+[uploadsDir, thumbnailsDir, mediumDir, optimizedDir, dataDir].forEach(dir => {
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
@@ -29,6 +31,8 @@ app.use(express.json());
 // Serve uploaded images statically
 app.use('/uploads', express.static(uploadsDir));
 app.use('/thumbnails', express.static(thumbnailsDir));
+app.use('/medium', express.static(mediumDir));
+app.use('/optimized', express.static(optimizedDir));
 
 // API Routes
 app.use('/api/themes', themesRouter);

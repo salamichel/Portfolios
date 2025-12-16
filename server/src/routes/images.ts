@@ -13,9 +13,11 @@ const router = Router();
 const BASE_DIR = process.env.BASE_DIR || process.cwd();
 const uploadsDir = path.join(BASE_DIR, 'uploads');
 const thumbnailsDir = path.join(uploadsDir, 'thumbnails');
+const mediumDir = path.join(uploadsDir, 'medium');
+const optimizedDir = path.join(uploadsDir, 'optimized');
 
 // Ensure directories exist
-[uploadsDir, thumbnailsDir].forEach(dir => {
+[uploadsDir, thumbnailsDir, mediumDir, optimizedDir].forEach(dir => {
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
@@ -33,17 +35,20 @@ const storage = multer.diskStorage({
   }
 });
 
+// Heavy formats that will be deleted after WebP conversion
+const HEAVY_FORMATS = ['image/tiff'];
+
 const upload = multer({
   storage,
   limits: {
-    fileSize: 50 * 1024 * 1024 // 50MB limit
+    fileSize: 200 * 1024 * 1024 // 200MB limit (for large TIFF files)
   },
   fileFilter: (req, file, cb) => {
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/tiff'];
     if (allowedTypes.includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error('Invalid file type. Only JPEG, PNG, GIF, and WebP are allowed.'));
+      cb(new Error('Invalid file type. Only JPEG, PNG, GIF, WebP, and TIFF are allowed.'));
     }
   }
 });
@@ -97,12 +102,26 @@ router.post('/upload', upload.array('images', 50), async (req, res) => {
       // Get image dimensions
       const metadata = await sharp(imagePath).metadata();
 
-      // Generate thumbnail
-      const thumbnailFilename = `thumb_${file.filename}`;
+      // Generate WebP thumbnail for gallery (400px)
+      const baseName = path.basename(file.filename, path.extname(file.filename));
+      const thumbnailFilename = `thumb_${baseName}.webp`;
       await sharp(imagePath)
         .resize(400, 400, { fit: 'cover' })
-        .jpeg({ quality: 80 })
+        .webp({ quality: 80 })
         .toFile(path.join(thumbnailsDir, thumbnailFilename));
+
+      // Generate medium WebP for detail view (1024px)
+      const mediumFilename = `medium_${baseName}.webp`;
+      await sharp(imagePath)
+        .resize(1024, 1024, { fit: 'inside', withoutEnlargement: true })
+        .webp({ quality: 85 })
+        .toFile(path.join(mediumDir, mediumFilename));
+
+      // Generate optimized WebP version of the full image
+      const optimizedFilename = `${baseName}.webp`;
+      await sharp(imagePath)
+        .webp({ quality: 85 })
+        .toFile(path.join(optimizedDir, optimizedFilename));
 
       let enrichment = {
         title: null as string | null,
@@ -126,6 +145,13 @@ router.post('/upload', upload.array('images', 50), async (req, res) => {
         } catch (err) {
           console.error('Failed to enrich image with Gemini:', err);
         }
+      }
+
+      // Delete heavy format files (like TIFF) after conversion to save space
+      const isHeavyFormat = HEAVY_FORMATS.includes(file.mimetype);
+      if (isHeavyFormat && fs.existsSync(imagePath)) {
+        fs.unlinkSync(imagePath);
+        console.log(`Deleted heavy format file: ${file.filename}`);
       }
 
       const image = imageDb.create({
@@ -215,11 +241,16 @@ router.delete('/:id', (req, res) => {
     }
 
     // Delete files
+    const baseName = path.basename(image.filename, path.extname(image.filename));
     const imagePath = path.join(uploadsDir, image.filename);
-    const thumbnailPath = path.join(thumbnailsDir, `thumb_${image.filename}`);
+    const thumbnailPath = path.join(thumbnailsDir, `thumb_${baseName}.webp`);
+    const mediumPath = path.join(mediumDir, `medium_${baseName}.webp`);
+    const optimizedPath = path.join(optimizedDir, `${baseName}.webp`);
 
     if (fs.existsSync(imagePath)) fs.unlinkSync(imagePath);
     if (fs.existsSync(thumbnailPath)) fs.unlinkSync(thumbnailPath);
+    if (fs.existsSync(mediumPath)) fs.unlinkSync(mediumPath);
+    if (fs.existsSync(optimizedPath)) fs.unlinkSync(optimizedPath);
 
     imageDb.delete(req.params.id);
     res.status(204).send();
