@@ -13,7 +13,7 @@ export interface ImageAnalysis {
 
 export async function analyzeImage(imagePath: string): Promise<ImageAnalysis> {
   try {
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
 
     const imageBuffer = fs.readFileSync(imagePath);
     const base64Image = imageBuffer.toString('base64');
