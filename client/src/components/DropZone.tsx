@@ -7,15 +7,16 @@ import type { Theme } from '../types';
 interface DropZoneProps {
   themes: Theme[];
   onUploadComplete: () => void;
+  preselectedThemeId?: string;
 }
 
 interface FileWithPreview extends File {
   preview: string;
 }
 
-export function DropZone({ themes, onUploadComplete }: DropZoneProps) {
+export function DropZone({ themes, onUploadComplete, preselectedThemeId }: DropZoneProps) {
   const [files, setFiles] = useState<FileWithPreview[]>([]);
-  const [selectedTheme, setSelectedTheme] = useState<string>('');
+  const [selectedTheme, setSelectedTheme] = useState<string>(preselectedThemeId || '');
   const [autoEnrich, setAutoEnrich] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);

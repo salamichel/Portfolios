@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Pencil, Trash2, Folder, X, Check } from 'lucide-react';
+import { Plus, Pencil, Trash2, Folder, X, Check, Upload } from 'lucide-react';
 import { themesApi, getThumbnailUrl } from '../api/client';
 import type { Theme } from '../types';
 
@@ -8,13 +8,15 @@ interface ThemeManagerProps {
   selectedTheme: string | null;
   onSelectTheme: (themeId: string | null) => void;
   onThemesChange: () => void;
+  onUploadToTheme?: (themeId: string) => void;
 }
 
-export function ThemeManager({ themes, selectedTheme, onSelectTheme, onThemesChange }: ThemeManagerProps) {
+export function ThemeManager({ themes, selectedTheme, onSelectTheme, onThemesChange, onUploadToTheme }: ThemeManagerProps) {
   const [showForm, setShowForm] = useState(false);
   const [editingTheme, setEditingTheme] = useState<Theme | null>(null);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [dragOverThemeId, setDragOverThemeId] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -68,6 +70,32 @@ export function ThemeManager({ themes, selectedTheme, onSelectTheme, onThemesCha
       if (coverImage) return getThumbnailUrl(coverImage.filename);
     }
     return null;
+  };
+
+  // Drag & Drop handlers
+  const handleDragOver = (e: React.DragEvent, themeId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (dragOverThemeId !== themeId) {
+      setDragOverThemeId(themeId);
+    }
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOverThemeId(null);
+  };
+
+  const handleDrop = (e: React.DragEvent, themeId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOverThemeId(null);
+
+    // Check if files are being dropped
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0 && onUploadToTheme) {
+      onUploadToTheme(themeId);
+    }
   };
 
   return (
@@ -142,16 +170,27 @@ export function ThemeManager({ themes, selectedTheme, onSelectTheme, onThemesCha
       <div className="space-y-2">
         {themes.map(theme => {
           const coverImage = getCoverImage(theme);
+          const isDragOver = dragOverThemeId === theme.id;
           return (
             <div
               key={theme.id}
-              className={`group flex items-center gap-3 p-3 rounded-lg transition-colors cursor-pointer ${
-                selectedTheme === theme.id ? 'bg-rose-500/20 text-rose-400' : 'hover:bg-gray-800'
+              className={`group flex items-center gap-3 p-3 rounded-lg transition-all cursor-pointer ${
+                isDragOver
+                  ? 'bg-rose-500/30 border-2 border-dashed border-rose-500 scale-[1.02]'
+                  : selectedTheme === theme.id
+                    ? 'bg-rose-500/20 text-rose-400 border-2 border-transparent'
+                    : 'hover:bg-gray-800 border-2 border-transparent'
               }`}
               onClick={() => onSelectTheme(theme.id)}
+              onDragOver={(e) => handleDragOver(e, theme.id)}
+              onDragEnter={(e) => handleDragOver(e, theme.id)}
+              onDragLeave={handleDragLeave}
+              onDrop={(e) => handleDrop(e, theme.id)}
             >
               <div className="w-10 h-10 bg-gray-700 rounded-lg overflow-hidden flex items-center justify-center">
-                {coverImage ? (
+                {isDragOver ? (
+                  <Upload className="w-5 h-5 text-rose-400 animate-pulse" />
+                ) : coverImage ? (
                   <img src={coverImage} alt="" className="w-full h-full object-cover" />
                 ) : (
                   <Folder className="w-5 h-5 text-gray-400" />
@@ -159,9 +198,20 @@ export function ThemeManager({ themes, selectedTheme, onSelectTheme, onThemesCha
               </div>
               <div className="flex-1 min-w-0">
                 <p className="font-medium truncate">{theme.name}</p>
-                <p className="text-sm text-gray-400">{theme.image_count || 0} images</p>
+                <p className="text-sm text-gray-400">
+                  {isDragOver ? 'Déposez pour ajouter...' : `${theme.image_count || 0} images`}
+                </p>
               </div>
               <div className="hidden group-hover:flex items-center gap-1">
+                {onUploadToTheme && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onUploadToTheme(theme.id); }}
+                    className="p-1.5 hover:bg-rose-500/20 text-rose-400 rounded"
+                    title="Ajouter des images"
+                  >
+                    <Upload className="w-4 h-4" />
+                  </button>
+                )}
                 <button
                   onClick={(e) => { e.stopPropagation(); startEdit(theme); }}
                   className="p-1.5 hover:bg-gray-600 rounded"
