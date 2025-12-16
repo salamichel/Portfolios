@@ -1,7 +1,14 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Loader2, Sparkles, Trash2, X, ChevronLeft, ChevronRight, Tag } from 'lucide-react';
+import { Loader2, Sparkles, Trash2, X, ChevronLeft, ChevronRight, Tag, Pencil, Save, XCircle } from 'lucide-react';
 import { imagesApi, getMediumImageUrl, getThumbnailUrl } from '../api/client';
 import type { Image, Theme } from '../types';
+
+interface EditFormData {
+  title: string;
+  description: string;
+  mood: string;
+  tags: string;
+}
 
 interface ImageGalleryProps {
   themeId?: string;
@@ -17,6 +24,9 @@ export function ImageGallery({ themeId, themes, searchQuery, onImageUpdate }: Im
   const [hasMore, setHasMore] = useState(true);
   const [selectedImage, setSelectedImage] = useState<Image | null>(null);
   const [enriching, setEnriching] = useState<string | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editForm, setEditForm] = useState<EditFormData>({ title: '', description: '', mood: '', tags: '' });
+  const [saving, setSaving] = useState(false);
   const observerRef = useRef<IntersectionObserver | null>(null);
   const loadMoreRef = useRef<HTMLDivElement>(null);
 
@@ -119,13 +129,70 @@ export function ImageGallery({ themeId, themes, searchQuery, onImageUpdate }: Im
     }
   };
 
+  const startEditing = (image: Image) => {
+    const tags = parseTags(image.tags);
+    setEditForm({
+      title: image.title || '',
+      description: image.description || '',
+      mood: image.mood || '',
+      tags: tags.join(', ')
+    });
+    setIsEditing(true);
+  };
+
+  const cancelEditing = () => {
+    setIsEditing(false);
+    setEditForm({ title: '', description: '', mood: '', tags: '' });
+  };
+
+  const handleSaveMetadata = async () => {
+    if (!selectedImage) return;
+
+    setSaving(true);
+    try {
+      // Parse tags from comma-separated string
+      const tagsArray = editForm.tags
+        .split(',')
+        .map(t => t.trim())
+        .filter(t => t.length > 0);
+
+      // Note: filename is NEVER modified - it's the storage reference
+      const updated = await imagesApi.update(selectedImage.id, {
+        title: editForm.title || null,
+        description: editForm.description || null,
+        mood: editForm.mood || null,
+        tags: JSON.stringify(tagsArray)
+      });
+
+      setImages(prev => prev.map(img => img.id === updated.id ? updated : img));
+      setSelectedImage(updated);
+      setIsEditing(false);
+      onImageUpdate?.();
+    } catch (error) {
+      console.error('Failed to save metadata:', error);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const navigateImage = (direction: 'prev' | 'next') => {
     if (!selectedImage) return;
     const currentIndex = images.findIndex(img => img.id === selectedImage.id);
     const newIndex = direction === 'prev' ? currentIndex - 1 : currentIndex + 1;
     if (newIndex >= 0 && newIndex < images.length) {
+      // Cancel editing when navigating to another image
+      if (isEditing) {
+        cancelEditing();
+      }
       setSelectedImage(images[newIndex]);
     }
+  };
+
+  const closeLightbox = () => {
+    if (isEditing) {
+      cancelEditing();
+    }
+    setSelectedImage(null);
   };
 
   const parseTags = (tags: string | null): string[] => {
@@ -196,7 +263,7 @@ export function ImageGallery({ themeId, themes, searchQuery, onImageUpdate }: Im
       {selectedImage && (
         <div
           className="fixed inset-0 z-50 bg-black/95 flex"
-          onClick={() => setSelectedImage(null)}
+          onClick={closeLightbox}
         >
           {/* Navigation */}
           <button
@@ -217,7 +284,7 @@ export function ImageGallery({ themeId, themes, searchQuery, onImageUpdate }: Im
 
           {/* Close button */}
           <button
-            onClick={() => setSelectedImage(null)}
+            onClick={closeLightbox}
             className="absolute top-4 right-4 p-2 bg-white/10 hover:bg-white/20 rounded-full transition-colors z-10 md:right-[340px]"
           >
             <X className="w-6 h-6" />
@@ -240,45 +307,143 @@ export function ImageGallery({ themeId, themes, searchQuery, onImageUpdate }: Im
             className="hidden md:block w-[320px] bg-gray-900 border-l border-gray-800 p-6 overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 className="text-xl font-semibold mb-4">
-              {selectedImage.title || selectedImage.original_name}
-            </h2>
+            {/* Filename - Read-only storage reference */}
+            <div className="mb-3 pb-3 border-b border-gray-800">
+              <span className="text-xs text-gray-500">Fichier (référence):</span>
+              <p className="text-xs text-gray-400 truncate" title={selectedImage.original_name}>
+                {selectedImage.original_name}
+              </p>
+            </div>
 
-            {selectedImage.description && (
-              <p className="text-gray-300 mb-4">{selectedImage.description}</p>
-            )}
-
-            {selectedImage.mood && (
-              <div className="mb-4">
-                <span className="text-sm text-gray-400">Ambiance:</span>
-                <span className="ml-2 px-2 py-1 bg-gray-800 rounded text-sm">{selectedImage.mood}</span>
-              </div>
-            )}
-
-            {/* Tags */}
-            {parseTags(selectedImage.tags).length > 0 && (
-              <div className="mb-4">
-                <div className="flex items-center gap-1 text-sm text-gray-400 mb-2">
-                  <Tag className="w-4 h-4" />
-                  Tags
+            {isEditing ? (
+              /* Edit Mode */
+              <div className="space-y-4">
+                {/* Title */}
+                <div>
+                  <label className="block text-sm text-gray-400 mb-1">Titre</label>
+                  <input
+                    type="text"
+                    value={editForm.title}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, title: e.target.value }))}
+                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white"
+                    placeholder="Titre de l'image"
+                  />
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  {parseTags(selectedImage.tags).map((tag, i) => (
-                    <span key={i} className="px-2 py-1 bg-gray-800 rounded-full text-xs">
-                      {tag}
-                    </span>
-                  ))}
+
+                {/* Description */}
+                <div>
+                  <label className="block text-sm text-gray-400 mb-1">Description</label>
+                  <textarea
+                    value={editForm.description}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, description: e.target.value }))}
+                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white resize-none"
+                    rows={3}
+                    placeholder="Description de l'image"
+                  />
+                </div>
+
+                {/* Mood */}
+                <div>
+                  <label className="block text-sm text-gray-400 mb-1">Ambiance</label>
+                  <input
+                    type="text"
+                    value={editForm.mood}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, mood: e.target.value }))}
+                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white"
+                    placeholder="Ex: Serein, Dramatique, Joyeux..."
+                  />
+                </div>
+
+                {/* Tags */}
+                <div>
+                  <label className="block text-sm text-gray-400 mb-1">Tags (séparés par virgule)</label>
+                  <input
+                    type="text"
+                    value={editForm.tags}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, tags: e.target.value }))}
+                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white"
+                    placeholder="nature, paysage, été..."
+                  />
+                </div>
+
+                {/* Save/Cancel buttons */}
+                <div className="flex gap-2 pt-2">
+                  <button
+                    onClick={handleSaveMetadata}
+                    disabled={saving}
+                    className="flex-1 flex items-center justify-center gap-2 bg-green-500/20 hover:bg-green-500/30 text-green-400 py-2 px-4 rounded-lg transition-colors"
+                  >
+                    {saving ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Save className="w-4 h-4" />
+                    )}
+                    Sauvegarder
+                  </button>
+                  <button
+                    onClick={cancelEditing}
+                    disabled={saving}
+                    className="flex-1 flex items-center justify-center gap-2 bg-gray-700 hover:bg-gray-600 text-gray-300 py-2 px-4 rounded-lg transition-colors"
+                  >
+                    <XCircle className="w-4 h-4" />
+                    Annuler
+                  </button>
                 </div>
               </div>
+            ) : (
+              /* View Mode */
+              <>
+                <div className="flex items-start justify-between mb-4">
+                  <h2 className="text-xl font-semibold flex-1">
+                    {selectedImage.title || selectedImage.original_name}
+                  </h2>
+                  <button
+                    onClick={() => startEditing(selectedImage)}
+                    className="ml-2 p-1.5 text-gray-400 hover:text-white hover:bg-gray-800 rounded transition-colors"
+                    title="Modifier les métadonnées"
+                  >
+                    <Pencil className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {selectedImage.description && (
+                  <p className="text-gray-300 mb-4">{selectedImage.description}</p>
+                )}
+
+                {selectedImage.mood && (
+                  <div className="mb-4">
+                    <span className="text-sm text-gray-400">Ambiance:</span>
+                    <span className="ml-2 px-2 py-1 bg-gray-800 rounded text-sm">{selectedImage.mood}</span>
+                  </div>
+                )}
+
+                {/* Tags */}
+                {parseTags(selectedImage.tags).length > 0 && (
+                  <div className="mb-4">
+                    <div className="flex items-center gap-1 text-sm text-gray-400 mb-2">
+                      <Tag className="w-4 h-4" />
+                      Tags
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {parseTags(selectedImage.tags).map((tag, i) => (
+                        <span key={i} className="px-2 py-1 bg-gray-800 rounded-full text-xs">
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
             )}
 
-            {/* Theme selector */}
-            <div className="mb-4">
+            {/* Theme selector - always visible */}
+            <div className="mb-4 mt-4 pt-4 border-t border-gray-800">
               <label className="block text-sm text-gray-400 mb-2">Thème</label>
               <select
                 value={selectedImage.theme_id || ''}
                 onChange={(e) => handleUpdateTheme(selectedImage, e.target.value || null)}
                 className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2"
+                disabled={isEditing}
               >
                 <option value="">Sans thème</option>
                 {themes.map(theme => (
@@ -294,31 +459,33 @@ export function ImageGallery({ themeId, themes, searchQuery, onImageUpdate }: Im
               <p>{new Date(selectedImage.created_at).toLocaleDateString('fr-FR')}</p>
             </div>
 
-            {/* Actions */}
-            <div className="space-y-2">
-              {!selectedImage.ai_enriched && (
-                <button
-                  onClick={() => handleEnrich(selectedImage)}
-                  disabled={enriching === selectedImage.id}
-                  className="w-full flex items-center justify-center gap-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 py-2 px-4 rounded-lg transition-colors"
-                >
-                  {enriching === selectedImage.id ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <Sparkles className="w-4 h-4" />
-                  )}
-                  Enrichir avec Gemini
-                </button>
-              )}
+            {/* Actions - hidden when editing */}
+            {!isEditing && (
+              <div className="space-y-2">
+                {!selectedImage.ai_enriched && (
+                  <button
+                    onClick={() => handleEnrich(selectedImage)}
+                    disabled={enriching === selectedImage.id}
+                    className="w-full flex items-center justify-center gap-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 py-2 px-4 rounded-lg transition-colors"
+                  >
+                    {enriching === selectedImage.id ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Sparkles className="w-4 h-4" />
+                    )}
+                    Enrichir avec Gemini
+                  </button>
+                )}
 
-              <button
-                onClick={() => handleDelete(selectedImage)}
-                className="w-full flex items-center justify-center gap-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 py-2 px-4 rounded-lg transition-colors"
-              >
-                <Trash2 className="w-4 h-4" />
-                Supprimer
-              </button>
-            </div>
+                <button
+                  onClick={() => handleDelete(selectedImage)}
+                  className="w-full flex items-center justify-center gap-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 py-2 px-4 rounded-lg transition-colors"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  Supprimer
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
