@@ -62,13 +62,14 @@ function App() {
         {/* Sidebar */}
         <aside
           className={`
-            fixed lg:static inset-y-0 left-0 z-30 w-72 bg-gray-900 border-r border-gray-800
+            fixed inset-y-0 left-0 z-30 w-72 bg-gray-900 border-r border-gray-800
             transform transition-transform duration-300 lg:transform-none
             ${showSidebar ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
             overflow-y-auto scrollbar-thin pt-4 lg:pt-0
+            lg:sticky lg:top-[73px] lg:h-[calc(100vh-73px)]
           `}
         >
-          <div className="p-4 lg:sticky lg:top-[73px]">
+          <div className="p-4">
             <ThemeManager
               themes={themes}
               selectedTheme={selectedTheme}
