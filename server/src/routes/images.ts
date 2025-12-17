@@ -131,10 +131,11 @@ router.post('/upload', upload.array('images', 50), async (req, res) => {
         ai_enriched: false
       };
 
-      // Optionally analyze with Gemini
+      // Optionally analyze with Gemini (use WebP version since Gemini doesn't support TIFF)
       if (shouldEnrich && process.env.GEMINI_API_KEY) {
         try {
-          const analysis = await analyzeImage(imagePath);
+          const webpPath = path.join(optimizedDir, optimizedFilename);
+          const analysis = await analyzeImage(webpPath);
           enrichment = {
             title: analysis.title,
             description: analysis.description,
@@ -192,8 +193,10 @@ router.post('/:id/enrich', async (req, res) => {
       return res.status(400).json({ error: 'Gemini API key not configured' });
     }
 
-    const imagePath = path.join(uploadsDir, image.filename);
-    const analysis = await analyzeImage(imagePath);
+    // Use WebP version for Gemini (TIFF not supported, and original may be deleted)
+    const baseName = path.basename(image.filename, path.extname(image.filename));
+    const webpPath = path.join(optimizedDir, `${baseName}.webp`);
+    const analysis = await analyzeImage(webpPath);
 
     const updatedImage = imageDb.update(req.params.id, {
       title: analysis.title,
