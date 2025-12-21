@@ -172,9 +172,9 @@ export const imageDb = {
     }
 
     if (options.search) {
-      whereClause += ' AND (title LIKE ? OR description LIKE ? OR tags LIKE ?)';
+      whereClause += ' AND (title LIKE ? OR description LIKE ? OR tags LIKE ? OR filename LIKE ? OR original_name LIKE ?)';
       const searchTerm = `%${options.search}%`;
-      params.push(searchTerm, searchTerm, searchTerm);
+      params.push(searchTerm, searchTerm, searchTerm, searchTerm, searchTerm);
     }
 
     const total = db.prepare(`SELECT COUNT(*) as count FROM images WHERE ${whereClause}`).get(...params) as { count: number };

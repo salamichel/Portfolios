@@ -30,7 +30,7 @@ export function Header({ searchQuery, onSearchChange, onUploadClick }: HeaderPro
               type="text"
               value={searchQuery}
               onChange={(e) => onSearchChange(e.target.value)}
-              placeholder="Rechercher par titre, tags, description..."
+              placeholder="Rechercher par nom de fichier, titre, tags..."
               className="w-full bg-gray-800 border border-gray-700 rounded-lg pl-10 pr-10 py-2 text-white placeholder-gray-400 focus:outline-none focus:border-rose-500"
             />
             {searchQuery && (
