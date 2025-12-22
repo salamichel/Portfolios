@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { X, Search, Check, Wand2, Loader2 } from 'lucide-react';
+import { X, Search, Check, Wand2, Loader2, Sparkles } from 'lucide-react';
 import { imagesApi, getThumbnailUrl } from '../../api/client';
 import type { Theme, Image } from '../../types';
 
@@ -14,6 +14,7 @@ interface ImageSelectorProps {
 export function ImageSelector({ themes, onSelect, onGenerateSuggestions, onClose, mode }: ImageSelectorProps) {
   const [images, setImages] = useState<Image[]>([]);
   const [loading, setLoading] = useState(true);
+  const [generating, setGenerating] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedThemeId, setSelectedThemeId] = useState<string | null>(null);
   const [selectedImages, setSelectedImages] = useState<Set<string>>(new Set());
@@ -69,6 +70,7 @@ export function ImageSelector({ themes, onSelect, onGenerateSuggestions, onClose
 
   const handleConfirmSelection = () => {
     if (onGenerateSuggestions && selectedImages.size > 0) {
+      setGenerating(true);
       onGenerateSuggestions(Array.from(selectedImages));
     }
   };
@@ -133,10 +135,20 @@ export function ImageSelector({ themes, onSelect, onGenerateSuggestions, onClose
               </span>
               <button
                 onClick={handleConfirmSelection}
-                className="flex items-center gap-2 px-4 py-2 bg-rose-500 hover:bg-rose-600 rounded-lg"
+                disabled={generating}
+                className="flex items-center gap-2 px-4 py-2 bg-rose-500 hover:bg-rose-600 rounded-lg disabled:opacity-70 disabled:cursor-not-allowed"
               >
-                <Wand2 className="w-4 h-4" />
-                Générer la mise en page
+                {generating ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Génération en cours...
+                  </>
+                ) : (
+                  <>
+                    <Wand2 className="w-4 h-4" />
+                    Générer la mise en page
+                  </>
+                )}
               </button>
             </div>
           )}
@@ -173,6 +185,13 @@ export function ImageSelector({ themes, onSelect, onGenerateSuggestions, onClose
                         className="w-full h-full object-cover"
                         loading="lazy"
                       />
+
+                      {/* AI enriched indicator */}
+                      {image.ai_enriched && (
+                        <div className="absolute top-2 left-2 w-5 h-5 bg-indigo-500 rounded-full flex items-center justify-center" title="Enrichie par l'IA">
+                          <Sparkles className="w-3 h-3 text-white" />
+                        </div>
+                      )}
 
                       {/* Selection indicator */}
                       {mode === 'multiple' && isSelected && (
