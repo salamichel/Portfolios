@@ -120,11 +120,13 @@ export function ImageSelector({ themes, onSelect, onGenerateSuggestions, onClose
               className="bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-rose-500"
             >
               <option value="">Tous les thèmes</option>
-              {themes.map(theme => (
-                <option key={theme.id} value={theme.id}>
-                  {theme.name} ({theme.image_count || 0})
-                </option>
-              ))}
+              {themes
+                .filter(theme => (theme.image_count || 0) > 0)
+                .map(theme => (
+                  <option key={theme.id} value={theme.id}>
+                    {theme.name} ({theme.image_count})
+                  </option>
+                ))}
             </select>
           </div>
 
