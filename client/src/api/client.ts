@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { Theme, Image, PaginatedImages } from '../types';
+import type { Theme, Image, PaginatedImages, Book, BookPage, PageTemplate, PageData, BookLayoutSuggestions, LayoutSuggestion } from '../types';
 
 const api = axios.create({
   baseURL: '/api'
@@ -74,3 +74,53 @@ export const getThumbnailUrl = (filename: string) => `/thumbnails/thumb_${getBas
 
 // Keep original URLs available if needed
 export const getOriginalImageUrl = (filename: string) => `/uploads/${filename}`;
+
+// Templates API
+export const templatesApi = {
+  getAll: () => api.get<PageTemplate[]>('/templates').then(res => res.data),
+
+  getById: (id: string) => api.get<PageTemplate>(`/templates/${id}`).then(res => res.data),
+
+  create: (data: { name: string; description?: string; layout: { slots: any[] } }) =>
+    api.post<PageTemplate>('/templates', data).then(res => res.data),
+
+  update: (id: string, data: Partial<PageTemplate>) =>
+    api.put<PageTemplate>(`/templates/${id}`, data).then(res => res.data),
+
+  delete: (id: string) => api.delete(`/templates/${id}`)
+};
+
+// Books API
+export const booksApi = {
+  getAll: () => api.get<Book[]>('/books').then(res => res.data),
+
+  getById: (id: string) => api.get<Book & { pages: BookPage[] }>(`/books/${id}`).then(res => res.data),
+
+  create: (data: { name: string; description?: string; page_format?: string }) =>
+    api.post<Book>('/books', data).then(res => res.data),
+
+  update: (id: string, data: Partial<Book>) =>
+    api.put<Book>(`/books/${id}`, data).then(res => res.data),
+
+  delete: (id: string) => api.delete(`/books/${id}`),
+
+  // Pages
+  addPage: (bookId: string, data: { template_id?: string; page_data?: PageData; position?: number }) =>
+    api.post<BookPage>(`/books/${bookId}/pages`, data).then(res => res.data),
+
+  updatePage: (bookId: string, pageId: string, data: { template_id?: string; page_data?: PageData; position?: number }) =>
+    api.put<BookPage>(`/books/${bookId}/pages/${pageId}`, data).then(res => res.data),
+
+  deletePage: (bookId: string, pageId: string) =>
+    api.delete(`/books/${bookId}/pages/${pageId}`),
+
+  reorderPages: (bookId: string, orderedIds: string[]) =>
+    api.put<BookPage[]>(`/books/${bookId}/pages/reorder`, { orderedIds }).then(res => res.data),
+
+  // AI Layout suggestions
+  suggestLayout: (bookId: string, imageIds: string[]) =>
+    api.post<BookLayoutSuggestions>(`/books/${bookId}/suggest-layout`, { image_ids: imageIds }).then(res => res.data),
+
+  applySuggestions: (bookId: string, suggestions: LayoutSuggestion[]) =>
+    api.post<BookPage[]>(`/books/${bookId}/apply-suggestions`, { suggestions }).then(res => res.data)
+};
