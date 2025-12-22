@@ -12,6 +12,7 @@ function App() {
   const [selectedTheme, setSelectedTheme] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [showUpload, setShowUpload] = useState(false);
+  const [uploadThemeId, setUploadThemeId] = useState<string | undefined>(undefined);
   const [showSidebar, setShowSidebar] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
@@ -30,8 +31,15 @@ function App() {
 
   const handleUploadComplete = () => {
     setShowUpload(false);
+    setUploadThemeId(undefined);
     setRefreshKey(k => k + 1);
     loadThemes();
+  };
+
+  const handleUploadToTheme = (themeId: string) => {
+    setUploadThemeId(themeId);
+    setShowUpload(true);
+    setShowSidebar(false);
   };
 
   const handleThemesChange = () => {
@@ -78,6 +86,7 @@ function App() {
                 setShowSidebar(false);
               }}
               onThemesChange={handleThemesChange}
+              onUploadToTheme={handleUploadToTheme}
             />
           </div>
         </aside>
@@ -109,14 +118,14 @@ function App() {
             <div className="sticky top-0 bg-gray-900 border-b border-gray-800 p-4 flex items-center justify-between">
               <h2 className="text-xl font-semibold">Téléverser des images</h2>
               <button
-                onClick={() => setShowUpload(false)}
+                onClick={() => { setShowUpload(false); setUploadThemeId(undefined); }}
                 className="p-2 hover:bg-gray-800 rounded-lg"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
             <div className="p-6">
-              <DropZone themes={themes} onUploadComplete={handleUploadComplete} />
+              <DropZone themes={themes} onUploadComplete={handleUploadComplete} preselectedThemeId={uploadThemeId} />
             </div>
           </div>
         </div>
