@@ -1,16 +1,17 @@
 import { useMemo } from 'react';
-import { Plus, X } from 'lucide-react';
+import { Plus, X, Type } from 'lucide-react';
 import { getMediumImageUrl } from '../../api/client';
-import type { BookPage, PageTemplate, Image, LayoutSlot } from '../../types';
+import type { BookPage, PageTemplate, Image, LayoutSlot, PageSlotData } from '../../types';
 
 interface DoublePageSpreadProps {
   page: BookPage;
   template?: PageTemplate;
   onSlotClick: (slotId: string) => void;
   onRemoveImage: (slotId: string) => void;
+  onEditAnnotation: (slotId: string, image: Image) => void;
 }
 
-export function DoublePageSpread({ page, template, onSlotClick, onRemoveImage }: DoublePageSpreadProps) {
+export function DoublePageSpread({ page, template, onSlotClick, onRemoveImage, onEditAnnotation }: DoublePageSpreadProps) {
   const slots = template?.layout?.slots || [];
   const pageData = page.page_data;
   const images = page.images || [];
@@ -22,9 +23,14 @@ export function DoublePageSpread({ page, template, onSlotClick, onRemoveImage }:
     return map;
   }, [images]);
 
+  // Get slot data for a slot
+  const getSlotData = (slotId: string): PageSlotData | undefined => {
+    return pageData?.slots?.find(s => s.slot_id === slotId);
+  };
+
   // Get assigned image for a slot
   const getSlotImage = (slotId: string): Image | undefined => {
-    const slotData = pageData?.slots?.find(s => s.slot_id === slotId);
+    const slotData = getSlotData(slotId);
     if (!slotData) return undefined;
     return imageMap.get(slotData.image_id);
   };
@@ -65,6 +71,58 @@ export function DoublePageSpread({ page, template, onSlotClick, onRemoveImage }:
     }
   };
 
+  // Render annotation overlay
+  const renderAnnotation = (slotData: PageSlotData | undefined, image: Image) => {
+    const annotation = slotData?.annotation;
+    if (!annotation) return null;
+
+    const showAny = annotation.show_title || annotation.show_description || annotation.show_paragraph;
+    if (!showAny) return null;
+
+    // Get display values (use image metadata if flagged)
+    const title = annotation.use_image_metadata && image.title ? image.title : annotation.title;
+    const description = annotation.use_image_metadata && image.description ? image.description : annotation.description;
+    const paragraph = annotation.paragraph;
+
+    const position = annotation.position || 'bottom';
+
+    const positionClasses = {
+      bottom: 'absolute bottom-0 left-0 right-0',
+      top: 'absolute top-0 left-0 right-0',
+      overlay: 'absolute inset-0 flex items-center justify-center',
+      side: 'absolute right-0 top-0 bottom-0 w-1/3'
+    };
+
+    const bgClasses = {
+      bottom: 'bg-gradient-to-t from-black/80 via-black/50 to-transparent p-3 pt-8',
+      top: 'bg-gradient-to-b from-black/80 via-black/50 to-transparent p-3 pb-8',
+      overlay: 'bg-black/60 p-4 text-center',
+      side: 'bg-black/70 p-3 flex flex-col justify-center'
+    };
+
+    return (
+      <div className={`${positionClasses[position]} pointer-events-none z-20`}>
+        <div className={bgClasses[position]}>
+          {annotation.show_title && title && (
+            <h3 className="text-white font-semibold text-sm leading-tight mb-1 drop-shadow-lg">
+              {title}
+            </h3>
+          )}
+          {annotation.show_description && description && (
+            <p className="text-white/90 text-xs leading-snug mb-1 drop-shadow">
+              {description}
+            </p>
+          )}
+          {annotation.show_paragraph && paragraph && (
+            <p className="text-white/80 text-xs leading-relaxed italic drop-shadow">
+              {paragraph}
+            </p>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="w-full max-w-5xl">
       {/* Book spread container */}
@@ -80,8 +138,14 @@ export function DoublePageSpread({ page, template, onSlotClick, onRemoveImage }:
 
         {/* Slots */}
         {slots.map((slot) => {
+          const slotData = getSlotData(slot.id);
           const image = getSlotImage(slot.id);
           const style = getSlotStyle(slot);
+          const hasAnnotation = slotData?.annotation && (
+            slotData.annotation.show_title ||
+            slotData.annotation.show_description ||
+            slotData.annotation.show_paragraph
+          );
 
           return (
             <div
@@ -90,14 +154,29 @@ export function DoublePageSpread({ page, template, onSlotClick, onRemoveImage }:
               className="group"
             >
               {image ? (
-                <div className="relative w-full h-full">
+                <div className="relative w-full h-full overflow-hidden">
                   <img
                     src={getMediumImageUrl(image.filename)}
                     alt={image.title || 'Image'}
                     className="w-full h-full object-cover"
                   />
+
+                  {/* Annotation display */}
+                  {renderAnnotation(slotData, image)}
+
                   {/* Overlay actions on hover */}
-                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 z-30">
+                    <button
+                      onClick={() => onEditAnnotation(slot.id, image)}
+                      className={`p-2 rounded-lg backdrop-blur-sm ${
+                        hasAnnotation
+                          ? 'bg-rose-500/70 hover:bg-rose-500/90'
+                          : 'bg-white/20 hover:bg-white/30'
+                      }`}
+                      title="Annoter l'image"
+                    >
+                      <Type className="w-5 h-5 text-white" />
+                    </button>
                     <button
                       onClick={() => onSlotClick(slot.id)}
                       className="p-2 bg-white/20 hover:bg-white/30 rounded-lg backdrop-blur-sm"

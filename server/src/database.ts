@@ -165,9 +165,21 @@ export interface Book {
 }
 
 // Page data stores image assignments to slots
+export interface SlotAnnotation {
+  title?: string;
+  description?: string;
+  paragraph?: string;
+  show_title?: boolean;
+  show_description?: boolean;
+  show_paragraph?: boolean;
+  position?: 'bottom' | 'top' | 'overlay' | 'side';
+  use_image_metadata?: boolean; // Use AI-enriched metadata from image
+}
+
 export interface PageSlotData {
   slot_id: string;
   image_id: string;
+  annotation?: SlotAnnotation;
 }
 
 export interface PageData {

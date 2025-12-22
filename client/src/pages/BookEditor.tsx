@@ -5,11 +5,12 @@ import {
   LayoutGrid, BookOpen
 } from 'lucide-react';
 import { booksApi, templatesApi, themesApi } from '../api/client';
-import type { Book, BookPage, PageTemplate, Theme, LayoutSuggestion } from '../types';
+import type { Book, BookPage, PageTemplate, Theme, LayoutSuggestion, Image, SlotAnnotation } from '../types';
 import { DoublePageSpread } from '../components/book/DoublePageSpread';
 import { ImageSelector } from '../components/book/ImageSelector';
 import { TemplateSelector } from '../components/book/TemplateSelector';
 import { PageThumbnails } from '../components/book/PageThumbnails';
+import { AnnotationEditor } from '../components/book/AnnotationEditor';
 
 export function BookEditor() {
   const { id } = useParams<{ id: string }>();
@@ -26,6 +27,11 @@ export function BookEditor() {
   const [showImageSelector, setShowImageSelector] = useState(false);
   const [showTemplateSelector, setShowTemplateSelector] = useState(false);
   const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
+
+  // Annotation editor
+  const [showAnnotationEditor, setShowAnnotationEditor] = useState(false);
+  const [annotationSlotId, setAnnotationSlotId] = useState<string | null>(null);
+  const [annotationImage, setAnnotationImage] = useState<Image | null>(null);
 
   // AI suggestions
   const [showAISuggestions, setShowAISuggestions] = useState(false);
@@ -193,6 +199,44 @@ export function BookEditor() {
     }
   };
 
+  const handleEditAnnotation = (slotId: string, image: Image) => {
+    setAnnotationSlotId(slotId);
+    setAnnotationImage(image);
+    setShowAnnotationEditor(true);
+  };
+
+  const handleSaveAnnotation = async (annotation: SlotAnnotation) => {
+    if (!id || !currentPage || !annotationSlotId) return;
+
+    try {
+      setSaving(true);
+      const currentSlots = currentPage.page_data?.slots || [];
+      const slotIndex = currentSlots.findIndex(s => s.slot_id === annotationSlotId);
+
+      if (slotIndex >= 0) {
+        // Update existing slot with annotation
+        const updatedSlots = [...currentSlots];
+        updatedSlots[slotIndex] = {
+          ...updatedSlots[slotIndex],
+          annotation
+        };
+
+        const updated = await booksApi.updatePage(id, currentPage.id, {
+          page_data: { slots: updatedSlots }
+        });
+        setPages(pages.map(p => p.id === currentPage.id ? updated : p));
+      }
+
+      setShowAnnotationEditor(false);
+      setAnnotationSlotId(null);
+      setAnnotationImage(null);
+    } catch (error) {
+      console.error('Failed to save annotation:', error);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
@@ -298,6 +342,7 @@ export function BookEditor() {
                 template={templates.find(t => t.id === currentPage.template_id)}
                 onSlotClick={handleSlotClick}
                 onRemoveImage={handleRemoveImage}
+                onEditAnnotation={handleEditAnnotation}
               />
             ) : (
               <div className="text-center">
@@ -410,6 +455,20 @@ export function BookEditor() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Annotation Editor Modal */}
+      {showAnnotationEditor && annotationImage && (
+        <AnnotationEditor
+          annotation={currentPage?.page_data?.slots?.find(s => s.slot_id === annotationSlotId)?.annotation}
+          image={annotationImage}
+          onSave={handleSaveAnnotation}
+          onClose={() => {
+            setShowAnnotationEditor(false);
+            setAnnotationSlotId(null);
+            setAnnotationImage(null);
+          }}
+        />
       )}
 
       {/* Saving indicator */}
