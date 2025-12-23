@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import {
   ArrowLeft, Plus, Trash2, Wand2, ChevronLeft, ChevronRight,
-  LayoutGrid, BookOpen
+  LayoutGrid, BookOpen, Presentation
 } from 'lucide-react';
 import { booksApi, templatesApi, themesApi } from '../api/client';
 import type { Book, BookPage, PageTemplate, Theme, LayoutSuggestion, Image, SlotAnnotation, TextSlotData } from '../types';
@@ -12,6 +12,7 @@ import { TemplateSelector } from '../components/book/TemplateSelector';
 import { PageThumbnails } from '../components/book/PageThumbnails';
 import { AnnotationEditor } from '../components/book/AnnotationEditor';
 import { TextSlotEditor } from '../components/book/TextSlotEditor';
+import { BookSlideshow } from '../components/book/BookSlideshow';
 
 export function BookEditor() {
   const { id } = useParams<{ id: string }>();
@@ -37,6 +38,9 @@ export function BookEditor() {
   // Text slot editor
   const [showTextSlotEditor, setShowTextSlotEditor] = useState(false);
   const [editingTextSlotId, setEditingTextSlotId] = useState<string | null>(null);
+
+  // Slideshow
+  const [showSlideshow, setShowSlideshow] = useState(false);
 
   // AI suggestions
   const [showAISuggestions, setShowAISuggestions] = useState(false);
@@ -321,6 +325,16 @@ export function BookEditor() {
           </div>
 
           <div className="flex items-center gap-2">
+            {pages.length > 0 && (
+              <button
+                onClick={() => setShowSlideshow(true)}
+                className="flex items-center gap-2 px-3 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors"
+              >
+                <Presentation className="w-4 h-4" />
+                <span className="hidden sm:inline">Présenter</span>
+              </button>
+            )}
+
             <button
               onClick={() => setShowImageSelector(true)}
               className="flex items-center gap-2 px-3 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors"
@@ -525,6 +539,16 @@ export function BookEditor() {
             setShowTextSlotEditor(false);
             setEditingTextSlotId(null);
           }}
+        />
+      )}
+
+      {/* Slideshow */}
+      {showSlideshow && (
+        <BookSlideshow
+          pages={pages}
+          templates={templates}
+          initialPageIndex={currentPageIndex}
+          onClose={() => setShowSlideshow(false)}
         />
       )}
 
