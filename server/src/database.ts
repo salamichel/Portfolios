@@ -132,6 +132,7 @@ export interface Image {
 // Layout slot definition for templates
 export interface LayoutSlot {
   id: string;
+  type: 'image' | 'text'; // Type of slot
   page: 'left' | 'right';
   x: number; // percentage 0-100
   y: number; // percentage 0-100
@@ -182,8 +183,25 @@ export interface PageSlotData {
   annotation?: SlotAnnotation;
 }
 
+// Text style options
+export interface TextStyle {
+  fontSize?: 'small' | 'medium' | 'large' | 'xlarge';
+  fontFamily?: 'sans' | 'serif' | 'mono';
+  fontWeight?: 'normal' | 'bold';
+  fontStyle?: 'normal' | 'italic';
+  textAlign?: 'left' | 'center' | 'right';
+  color?: string; // hex color
+}
+
+export interface TextSlotData {
+  slot_id: string;
+  content: string;
+  style?: TextStyle;
+}
+
 export interface PageData {
   slots: PageSlotData[];
+  textSlots?: TextSlotData[];
 }
 
 export interface BookPage {
@@ -421,8 +439,8 @@ export const templateDb = {
         is_predefined: true,
         layout: {
           slots: [
-            { id: 'left-full', page: 'left', x: 0, y: 0, width: 100, height: 100 },
-            { id: 'right-full', page: 'right', x: 0, y: 0, width: 100, height: 100 }
+            { id: 'left-full', type: 'image', page: 'left', x: 0, y: 0, width: 100, height: 100 },
+            { id: 'right-full', type: 'image', page: 'right', x: 0, y: 0, width: 100, height: 100 }
           ]
         }
       },
@@ -433,7 +451,7 @@ export const templateDb = {
         is_predefined: true,
         layout: {
           slots: [
-            { id: 'left-full', page: 'left', x: 0, y: 0, width: 100, height: 100 }
+            { id: 'left-full', type: 'image', page: 'left', x: 0, y: 0, width: 100, height: 100 }
           ]
         }
       },
@@ -444,7 +462,7 @@ export const templateDb = {
         is_predefined: true,
         layout: {
           slots: [
-            { id: 'right-full', page: 'right', x: 0, y: 0, width: 100, height: 100 }
+            { id: 'right-full', type: 'image', page: 'right', x: 0, y: 0, width: 100, height: 100 }
           ]
         }
       },
@@ -455,10 +473,10 @@ export const templateDb = {
         is_predefined: true,
         layout: {
           slots: [
-            { id: 'left-top', page: 'left', x: 5, y: 5, width: 45, height: 45 },
-            { id: 'left-bottom', page: 'left', x: 5, y: 50, width: 45, height: 45 },
-            { id: 'right-top', page: 'right', x: 50, y: 5, width: 45, height: 45 },
-            { id: 'right-bottom', page: 'right', x: 50, y: 50, width: 45, height: 45 }
+            { id: 'left-top', type: 'image', page: 'left', x: 5, y: 5, width: 45, height: 45 },
+            { id: 'left-bottom', type: 'image', page: 'left', x: 5, y: 50, width: 45, height: 45 },
+            { id: 'right-top', type: 'image', page: 'right', x: 50, y: 5, width: 45, height: 45 },
+            { id: 'right-bottom', type: 'image', page: 'right', x: 50, y: 50, width: 45, height: 45 }
           ]
         }
       },
@@ -469,9 +487,9 @@ export const templateDb = {
         is_predefined: true,
         layout: {
           slots: [
-            { id: 'left-full', page: 'left', x: 0, y: 0, width: 100, height: 100 },
-            { id: 'right-top', page: 'right', x: 5, y: 5, width: 90, height: 45 },
-            { id: 'right-bottom', page: 'right', x: 5, y: 52, width: 90, height: 43 }
+            { id: 'left-full', type: 'image', page: 'left', x: 0, y: 0, width: 100, height: 100 },
+            { id: 'right-top', type: 'image', page: 'right', x: 5, y: 5, width: 90, height: 45 },
+            { id: 'right-bottom', type: 'image', page: 'right', x: 5, y: 52, width: 90, height: 43 }
           ]
         }
       },
@@ -482,9 +500,9 @@ export const templateDb = {
         is_predefined: true,
         layout: {
           slots: [
-            { id: 'left-top', page: 'left', x: 5, y: 5, width: 90, height: 45 },
-            { id: 'left-bottom', page: 'left', x: 5, y: 52, width: 90, height: 43 },
-            { id: 'right-full', page: 'right', x: 0, y: 0, width: 100, height: 100 }
+            { id: 'left-top', type: 'image', page: 'left', x: 5, y: 5, width: 90, height: 45 },
+            { id: 'left-bottom', type: 'image', page: 'left', x: 5, y: 52, width: 90, height: 43 },
+            { id: 'right-full', type: 'image', page: 'right', x: 0, y: 0, width: 100, height: 100 }
           ]
         }
       },
@@ -495,7 +513,7 @@ export const templateDb = {
         is_predefined: true,
         layout: {
           slots: [
-            { id: 'panoramic', page: 'left', x: 0, y: 20, width: 200, height: 60 }
+            { id: 'panoramic', type: 'image', page: 'left', x: 0, y: 20, width: 200, height: 60 }
           ]
         }
       },
@@ -506,9 +524,9 @@ export const templateDb = {
         is_predefined: true,
         layout: {
           slots: [
-            { id: 'left-img', page: 'left', x: 5, y: 25, width: 90, height: 50 },
-            { id: 'center-img', page: 'right', x: 5, y: 25, width: 45, height: 50 },
-            { id: 'right-img', page: 'right', x: 52, y: 25, width: 43, height: 50 }
+            { id: 'left-img', type: 'image', page: 'left', x: 5, y: 25, width: 90, height: 50 },
+            { id: 'center-img', type: 'image', page: 'right', x: 5, y: 25, width: 45, height: 50 },
+            { id: 'right-img', type: 'image', page: 'right', x: 52, y: 25, width: 43, height: 50 }
           ]
         }
       },
@@ -519,11 +537,11 @@ export const templateDb = {
         is_predefined: true,
         layout: {
           slots: [
-            { id: 'left-large', page: 'left', x: 5, y: 5, width: 60, height: 60 },
-            { id: 'left-small-1', page: 'left', x: 67, y: 5, width: 28, height: 28 },
-            { id: 'left-small-2', page: 'left', x: 67, y: 35, width: 28, height: 30 },
-            { id: 'right-top', page: 'right', x: 5, y: 5, width: 90, height: 45 },
-            { id: 'right-bottom', page: 'right', x: 5, y: 52, width: 90, height: 43 }
+            { id: 'left-large', type: 'image', page: 'left', x: 5, y: 5, width: 60, height: 60 },
+            { id: 'left-small-1', type: 'image', page: 'left', x: 67, y: 5, width: 28, height: 28 },
+            { id: 'left-small-2', type: 'image', page: 'left', x: 67, y: 35, width: 28, height: 30 },
+            { id: 'right-top', type: 'image', page: 'right', x: 5, y: 5, width: 90, height: 45 },
+            { id: 'right-bottom', type: 'image', page: 'right', x: 5, y: 52, width: 90, height: 43 }
           ]
         }
       },
@@ -534,7 +552,83 @@ export const templateDb = {
         is_predefined: true,
         layout: {
           slots: [
-            { id: 'centered', page: 'left', x: 25, y: 15, width: 150, height: 70 }
+            { id: 'centered', type: 'image', page: 'left', x: 25, y: 15, width: 150, height: 70 }
+          ]
+        }
+      },
+      // Templates avec zones de texte
+      {
+        id: 'tpl-image-text-right',
+        name: 'Image + Texte droite',
+        description: 'Une image à gauche avec une zone de texte à droite',
+        is_predefined: true,
+        layout: {
+          slots: [
+            { id: 'left-full', type: 'image', page: 'left', x: 0, y: 0, width: 100, height: 100 },
+            { id: 'right-text', type: 'text', page: 'right', x: 10, y: 20, width: 80, height: 60 }
+          ]
+        }
+      },
+      {
+        id: 'tpl-text-image-left',
+        name: 'Texte + Image gauche',
+        description: 'Une zone de texte à gauche avec une image à droite',
+        is_predefined: true,
+        layout: {
+          slots: [
+            { id: 'left-text', type: 'text', page: 'left', x: 10, y: 20, width: 80, height: 60 },
+            { id: 'right-full', type: 'image', page: 'right', x: 0, y: 0, width: 100, height: 100 }
+          ]
+        }
+      },
+      {
+        id: 'tpl-images-caption',
+        name: 'Images + Légende',
+        description: 'Deux images avec une zone de légende en bas',
+        is_predefined: true,
+        layout: {
+          slots: [
+            { id: 'left-img', type: 'image', page: 'left', x: 5, y: 5, width: 90, height: 70 },
+            { id: 'right-img', type: 'image', page: 'right', x: 5, y: 5, width: 90, height: 70 },
+            { id: 'caption', type: 'text', page: 'left', x: 5, y: 78, width: 190, height: 17 }
+          ]
+        }
+      },
+      {
+        id: 'tpl-title-image',
+        name: 'Titre + Image',
+        description: 'Une zone de titre en haut avec une grande image',
+        is_predefined: true,
+        layout: {
+          slots: [
+            { id: 'title', type: 'text', page: 'left', x: 10, y: 5, width: 180, height: 15 },
+            { id: 'main-image', type: 'image', page: 'left', x: 10, y: 22, width: 180, height: 73 }
+          ]
+        }
+      },
+      {
+        id: 'tpl-chapter-intro',
+        name: 'Introduction chapitre',
+        description: 'Page de titre de chapitre avec texte d\'introduction',
+        is_predefined: true,
+        layout: {
+          slots: [
+            { id: 'chapter-title', type: 'text', page: 'left', x: 15, y: 30, width: 70, height: 40 },
+            { id: 'chapter-image', type: 'image', page: 'right', x: 0, y: 0, width: 100, height: 100 }
+          ]
+        }
+      },
+      {
+        id: 'tpl-gallery-text',
+        name: 'Galerie + Texte',
+        description: 'Trois images à gauche avec texte descriptif à droite',
+        is_predefined: true,
+        layout: {
+          slots: [
+            { id: 'img-1', type: 'image', page: 'left', x: 5, y: 5, width: 90, height: 30 },
+            { id: 'img-2', type: 'image', page: 'left', x: 5, y: 37, width: 90, height: 30 },
+            { id: 'img-3', type: 'image', page: 'left', x: 5, y: 69, width: 90, height: 26 },
+            { id: 'description', type: 'text', page: 'right', x: 10, y: 15, width: 80, height: 70 }
           ]
         }
       }

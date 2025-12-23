@@ -43,6 +43,7 @@ export interface UploadProgress {
 // Layout slot definition for templates
 export interface LayoutSlot {
   id: string;
+  type: 'image' | 'text'; // Type of slot
   page: 'left' | 'right';
   x: number; // percentage 0-100
   y: number; // percentage 0-100
@@ -95,8 +96,25 @@ export interface PageSlotData {
   annotation?: SlotAnnotation;
 }
 
+// Text style options
+export interface TextStyle {
+  fontSize?: 'small' | 'medium' | 'large' | 'xlarge';
+  fontFamily?: 'sans' | 'serif' | 'mono';
+  fontWeight?: 'normal' | 'bold';
+  fontStyle?: 'normal' | 'italic';
+  textAlign?: 'left' | 'center' | 'right';
+  color?: string; // hex color
+}
+
+export interface TextSlotData {
+  slot_id: string;
+  content: string;
+  style?: TextStyle;
+}
+
 export interface PageData {
   slots: PageSlotData[];
+  textSlots?: TextSlotData[];
 }
 
 export interface BookPage {

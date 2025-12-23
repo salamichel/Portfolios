@@ -5,12 +5,13 @@ import {
   LayoutGrid, BookOpen
 } from 'lucide-react';
 import { booksApi, templatesApi, themesApi } from '../api/client';
-import type { Book, BookPage, PageTemplate, Theme, LayoutSuggestion, Image, SlotAnnotation } from '../types';
+import type { Book, BookPage, PageTemplate, Theme, LayoutSuggestion, Image, SlotAnnotation, TextSlotData } from '../types';
 import { DoublePageSpread } from '../components/book/DoublePageSpread';
 import { ImageSelector } from '../components/book/ImageSelector';
 import { TemplateSelector } from '../components/book/TemplateSelector';
 import { PageThumbnails } from '../components/book/PageThumbnails';
 import { AnnotationEditor } from '../components/book/AnnotationEditor';
+import { TextSlotEditor } from '../components/book/TextSlotEditor';
 
 export function BookEditor() {
   const { id } = useParams<{ id: string }>();
@@ -32,6 +33,10 @@ export function BookEditor() {
   const [showAnnotationEditor, setShowAnnotationEditor] = useState(false);
   const [annotationSlotId, setAnnotationSlotId] = useState<string | null>(null);
   const [annotationImage, setAnnotationImage] = useState<Image | null>(null);
+
+  // Text slot editor
+  const [showTextSlotEditor, setShowTextSlotEditor] = useState(false);
+  const [editingTextSlotId, setEditingTextSlotId] = useState<string | null>(null);
 
   // AI suggestions
   const [showAISuggestions, setShowAISuggestions] = useState(false);
@@ -237,6 +242,44 @@ export function BookEditor() {
     }
   };
 
+  const handleEditTextSlot = (slotId: string) => {
+    setEditingTextSlotId(slotId);
+    setShowTextSlotEditor(true);
+  };
+
+  const handleSaveTextSlot = async (textSlot: TextSlotData) => {
+    if (!id || !currentPage || !editingTextSlotId) return;
+
+    try {
+      setSaving(true);
+      const currentTextSlots = currentPage.page_data?.textSlots || [];
+      const existingIndex = currentTextSlots.findIndex(s => s.slot_id === editingTextSlotId);
+
+      let updatedTextSlots: TextSlotData[];
+      if (existingIndex >= 0) {
+        updatedTextSlots = [...currentTextSlots];
+        updatedTextSlots[existingIndex] = textSlot;
+      } else {
+        updatedTextSlots = [...currentTextSlots, textSlot];
+      }
+
+      const updated = await booksApi.updatePage(id, currentPage.id, {
+        page_data: {
+          slots: currentPage.page_data?.slots || [],
+          textSlots: updatedTextSlots
+        }
+      });
+      setPages(pages.map(p => p.id === currentPage.id ? updated : p));
+
+      setShowTextSlotEditor(false);
+      setEditingTextSlotId(null);
+    } catch (error) {
+      console.error('Failed to save text slot:', error);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
@@ -343,6 +386,7 @@ export function BookEditor() {
                 onSlotClick={handleSlotClick}
                 onRemoveImage={handleRemoveImage}
                 onEditAnnotation={handleEditAnnotation}
+                onEditTextSlot={handleEditTextSlot}
               />
             ) : (
               <div className="text-center">
@@ -467,6 +511,19 @@ export function BookEditor() {
             setShowAnnotationEditor(false);
             setAnnotationSlotId(null);
             setAnnotationImage(null);
+          }}
+        />
+      )}
+
+      {/* Text Slot Editor Modal */}
+      {showTextSlotEditor && editingTextSlotId && (
+        <TextSlotEditor
+          textSlot={currentPage?.page_data?.textSlots?.find(s => s.slot_id === editingTextSlotId)}
+          slotId={editingTextSlotId}
+          onSave={handleSaveTextSlot}
+          onClose={() => {
+            setShowTextSlotEditor(false);
+            setEditingTextSlotId(null);
           }}
         />
       )}
