@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Search, Upload, X, Camera, Settings } from 'lucide-react';
+import { Search, Upload, X, Camera, Settings, BookOpen } from 'lucide-react';
 
 interface HeaderProps {
   searchQuery: string;
@@ -52,6 +52,14 @@ export function Header({ searchQuery, onSearchChange, onUploadClick }: HeaderPro
           >
             <Search className="w-5 h-5" />
           </button>
+
+          <Link
+            to="/books"
+            className="p-2 hover:bg-gray-800 rounded-lg transition-colors"
+            title="Créer un book"
+          >
+            <BookOpen className="w-5 h-5" />
+          </Link>
 
           <Link
             to="/admin/themes"

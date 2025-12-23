@@ -5,6 +5,8 @@ import path from 'path';
 import fs from 'fs';
 import themesRouter from './routes/themes.js';
 import imagesRouter from './routes/images.js';
+import booksRouter from './routes/books.js';
+import templatesRouter from './routes/templates.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -37,6 +39,8 @@ app.use('/optimized', express.static(optimizedDir));
 // API Routes
 app.use('/api/themes', themesRouter);
 app.use('/api/images', imagesRouter);
+app.use('/api/books', booksRouter);
+app.use('/api/templates', templatesRouter);
 
 // Health check
 app.get('/api/health', (req, res) => {
