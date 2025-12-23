@@ -427,6 +427,12 @@ export const templateDb = {
     return result.changes > 0;
   },
 
+  resetPredefined(): void {
+    // Delete all predefined templates and recreate them
+    db.prepare('DELETE FROM page_templates WHERE is_predefined = 1').run();
+    this.initPredefined();
+  },
+
   initPredefined(): void {
     const existing = db.prepare('SELECT COUNT(*) as count FROM page_templates WHERE is_predefined = 1').get() as { count: number };
     if (existing.count > 0) return;

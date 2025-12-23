@@ -79,6 +79,20 @@ router.put('/:id', (req, res) => {
   }
 });
 
+// Reset predefined templates (useful after updates)
+router.post('/reset-predefined', (_req, res) => {
+  try {
+    templateDb.resetPredefined();
+    const templates = templateDb.getAll();
+    res.json({
+      message: 'Predefined templates reset successfully',
+      count: templates.filter(t => t.is_predefined).length
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to reset predefined templates' });
+  }
+});
+
 // Delete custom template
 router.delete('/:id', (req, res) => {
   try {
