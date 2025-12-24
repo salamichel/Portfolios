@@ -28,14 +28,23 @@ export default function TagMoodSelector({
   useEffect(() => {
     const fetchMetadata = async () => {
       try {
+        console.log('[TagMoodSelector] Fetching tags and moods...');
         const [tags, moods] = await Promise.all([
           imagesApi.getTags(),
           imagesApi.getMoods()
         ]);
+        console.log('[TagMoodSelector] Received tags:', tags);
+        console.log('[TagMoodSelector] Received moods:', moods);
         setAvailableTags(tags);
         setAvailableMoods(moods);
       } catch (error) {
-        console.error('Failed to fetch metadata:', error);
+        console.error('[TagMoodSelector] Failed to fetch metadata:', error);
+        if (error instanceof Error) {
+          console.error('[TagMoodSelector] Error message:', error.message);
+        }
+        // Set empty arrays on error to show "no tags" message
+        setAvailableTags([]);
+        setAvailableMoods([]);
       } finally {
         setLoading(false);
       }
