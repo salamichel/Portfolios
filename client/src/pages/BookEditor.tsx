@@ -355,9 +355,9 @@ export function BookEditor() {
         </div>
       </header>
 
-      <div className="flex-1 flex">
+      <div className="flex-1 flex overflow-hidden">
         {/* Page thumbnails sidebar */}
-        <aside className="w-48 bg-gray-900 border-r border-gray-800 overflow-y-auto p-4">
+        <aside className="w-48 bg-gray-900 border-r border-gray-800 overflow-y-auto p-4 flex-shrink-0">
           <PageThumbnails
             pages={pages}
             currentIndex={currentPageIndex}
