@@ -397,35 +397,60 @@ export const imageDb = {
   },
 
   getTagsWithCounts(): Array<{ tag: string; count: number }> {
-    const images = db.prepare('SELECT tags FROM images WHERE tags IS NOT NULL AND tags != ""').all() as { tags: string }[];
-    const tagCounts = new Map<string, number>();
+    try {
+      const images = db.prepare('SELECT tags FROM images WHERE tags IS NOT NULL AND tags != ""').all() as { tags: string }[];
+      const tagCounts = new Map<string, number>();
 
-    images.forEach(image => {
-      try {
-        const tags = JSON.parse(image.tags) as string[];
-        tags.forEach(tag => {
-          tagCounts.set(tag, (tagCounts.get(tag) || 0) + 1);
-        });
-      } catch {
-        // Invalid JSON, skip
-      }
-    });
+      images.forEach(image => {
+        try {
+          const tags = JSON.parse(image.tags);
+          if (Array.isArray(tags)) {
+            tags.forEach(tag => {
+              if (tag && typeof tag === 'string') {
+                tagCounts.set(tag.trim(), (tagCounts.get(tag.trim()) || 0) + 1);
+              }
+            });
+          }
+        } catch {
+          // Try comma-separated format
+          try {
+            const tags = image.tags.split(',');
+            tags.forEach(tag => {
+              const trimmed = tag.trim();
+              if (trimmed) {
+                tagCounts.set(trimmed, (tagCounts.get(trimmed) || 0) + 1);
+              }
+            });
+          } catch {
+            // Skip invalid entries
+          }
+        }
+      });
 
-    return Array.from(tagCounts.entries())
-      .map(([tag, count]) => ({ tag, count }))
-      .sort((a, b) => b.count - a.count);
+      return Array.from(tagCounts.entries())
+        .map(([tag, count]) => ({ tag, count }))
+        .sort((a, b) => b.count - a.count);
+    } catch (error) {
+      console.error('Error in getTagsWithCounts:', error);
+      return [];
+    }
   },
 
   getMoodsWithCounts(): Array<{ mood: string; count: number }> {
-    const moods = db.prepare(`
-      SELECT mood, COUNT(*) as count
-      FROM images
-      WHERE mood IS NOT NULL AND mood != ''
-      GROUP BY mood
-      ORDER BY count DESC
-    `).all() as Array<{ mood: string; count: number }>;
+    try {
+      const moods = db.prepare(`
+        SELECT mood, COUNT(*) as count
+        FROM images
+        WHERE mood IS NOT NULL AND mood != ''
+        GROUP BY mood
+        ORDER BY count DESC
+      `).all() as Array<{ mood: string; count: number }>;
 
-    return moods;
+      return moods;
+    } catch (error) {
+      console.error('Error in getMoodsWithCounts:', error);
+      return [];
+    }
   },
 
   getAllTags(): string[] {
