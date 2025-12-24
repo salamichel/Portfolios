@@ -441,7 +441,7 @@ export function BookEditor() {
       </div>
 
       {/* Image Selector Modal */}
-      {showImageSelector && (
+      {showImageSelector && book && (
         <ImageSelector
           themes={themes}
           onSelect={selectedSlotId ? handleImageAssign : undefined}
@@ -451,6 +451,20 @@ export function BookEditor() {
             setSelectedSlotId(null);
           }}
           mode={selectedSlotId ? 'single' : 'multiple'}
+          bookTags={book.tags ? (() => {
+            try {
+              return JSON.parse(book.tags!) as string[];
+            } catch {
+              return null;
+            }
+          })() : null}
+          bookMoods={book.mood ? (() => {
+            try {
+              return JSON.parse(book.mood!) as string[];
+            } catch {
+              return null;
+            }
+          })() : null}
         />
       )}
 

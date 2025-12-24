@@ -9,9 +9,11 @@ interface ImageSelectorProps {
   onGenerateSuggestions?: (imageIds: string[]) => void;
   onClose: () => void;
   mode: 'single' | 'multiple';
+  bookTags?: string[] | null;
+  bookMoods?: string[] | null;
 }
 
-export function ImageSelector({ themes, onSelect, onGenerateSuggestions, onClose, mode }: ImageSelectorProps) {
+export function ImageSelector({ themes, onSelect, onGenerateSuggestions, onClose, mode, bookTags, bookMoods }: ImageSelectorProps) {
   const [images, setImages] = useState<Image[]>([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
@@ -22,6 +24,52 @@ export function ImageSelector({ themes, onSelect, onGenerateSuggestions, onClose
   const [offset, setOffset] = useState(0);
   const limit = 50;
 
+  // Filter images by book tags/moods
+  const filterImagesByBookCriteria = (image: Image): boolean => {
+    // If no filters are set, show all images
+    if ((!bookTags || bookTags.length === 0) && (!bookMoods || bookMoods.length === 0)) {
+      return true;
+    }
+
+    let matchesTags = true;
+    let matchesMoods = true;
+
+    // Check tags
+    if (bookTags && bookTags.length > 0) {
+      if (!image.tags) {
+        matchesTags = false;
+      } else {
+        try {
+          const imageTags = JSON.parse(image.tags) as string[];
+          matchesTags = bookTags.some(tag => imageTags.includes(tag));
+        } catch {
+          matchesTags = false;
+        }
+      }
+    }
+
+    // Check moods
+    if (bookMoods && bookMoods.length > 0) {
+      if (!image.mood) {
+        matchesMoods = false;
+      } else {
+        matchesMoods = bookMoods.includes(image.mood);
+      }
+    }
+
+    // Return true if image matches either tags OR moods (if both are specified)
+    // If only one filter is specified, only check that one
+    if (bookTags && bookTags.length > 0 && bookMoods && bookMoods.length > 0) {
+      return matchesTags || matchesMoods;
+    } else if (bookTags && bookTags.length > 0) {
+      return matchesTags;
+    } else if (bookMoods && bookMoods.length > 0) {
+      return matchesMoods;
+    }
+
+    return true;
+  };
+
   const loadImages = useCallback(async () => {
     try {
       setLoading(true);
@@ -31,10 +79,14 @@ export function ImageSelector({ themes, onSelect, onGenerateSuggestions, onClose
         limit,
         offset
       });
+
+      // Apply book tags/moods filter
+      const filteredImages = result.images.filter(filterImagesByBookCriteria);
+
       if (offset === 0) {
-        setImages(result.images);
+        setImages(filteredImages);
       } else {
-        setImages(prev => [...prev, ...result.images]);
+        setImages(prev => [...prev, ...filteredImages]);
       }
       setTotal(result.total);
     } catch (error) {
@@ -42,7 +94,7 @@ export function ImageSelector({ themes, onSelect, onGenerateSuggestions, onClose
     } finally {
       setLoading(false);
     }
-  }, [selectedThemeId, searchQuery, offset]);
+  }, [selectedThemeId, searchQuery, offset, bookTags, bookMoods]);
 
   useEffect(() => {
     setOffset(0);
@@ -87,9 +139,25 @@ export function ImageSelector({ themes, onSelect, onGenerateSuggestions, onClose
         {/* Header */}
         <div className="flex-shrink-0 border-b border-gray-800 p-4">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold">
-              {mode === 'single' ? 'Choisir une image' : 'Sélectionner des images pour l\'assistant IA'}
-            </h2>
+            <div>
+              <h2 className="text-xl font-semibold">
+                {mode === 'single' ? 'Choisir une image' : 'Sélectionner des images pour l\'assistant IA'}
+              </h2>
+              {((bookTags && bookTags.length > 0) || (bookMoods && bookMoods.length > 0)) && (
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {bookTags && bookTags.length > 0 && (
+                    <div className="text-xs text-blue-400 bg-blue-500/10 px-2 py-1 rounded-full">
+                      Filtré par tags: {bookTags.join(', ')}
+                    </div>
+                  )}
+                  {bookMoods && bookMoods.length > 0 && (
+                    <div className="text-xs text-purple-400 bg-purple-500/10 px-2 py-1 rounded-full">
+                      Filtré par humeur: {bookMoods.join(', ')}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
             <button
               onClick={onClose}
               className="p-2 hover:bg-gray-800 rounded-lg"

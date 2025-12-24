@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { Theme, Image, PaginatedImages, Book, BookPage, PageTemplate, PageData, BookLayoutSuggestions, LayoutSuggestion } from '../types';
+import type { Theme, Image, PaginatedImages, Book, BookPage, PageTemplate, PageData, BookLayoutSuggestions, LayoutSuggestion, TagWithCount, MoodWithCount } from '../types';
 
 const api = axios.create({
   baseURL: '/api'
@@ -58,7 +58,11 @@ export const imagesApi = {
   update: (id: string, data: Partial<Image>) =>
     api.put<Image>(`/images/${id}`, data).then(res => res.data),
 
-  delete: (id: string) => api.delete(`/images/${id}`)
+  delete: (id: string) => api.delete(`/images/${id}`),
+
+  getTags: () => api.get<TagWithCount[]>('/images/metadata/tags').then(res => res.data),
+
+  getMoods: () => api.get<MoodWithCount[]>('/images/metadata/moods').then(res => res.data)
 };
 
 // Helper to get the base name without extension

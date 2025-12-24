@@ -71,10 +71,22 @@ export interface Book {
   description: string | null;
   cover_image_id: string | null;
   page_format: string;
+  tags: string | null;
+  mood: string | null;
   created_at: string;
   updated_at: string;
   page_count?: number;
   pages?: BookPage[];
+}
+
+export interface TagWithCount {
+  tag: string;
+  count: number;
+}
+
+export interface MoodWithCount {
+  mood: string;
+  count: number;
 }
 
 // Annotation for a slot

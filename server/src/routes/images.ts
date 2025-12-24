@@ -69,6 +69,26 @@ router.get('/', (req, res) => {
   }
 });
 
+// Get all tags with photo counts
+router.get('/metadata/tags', (req, res) => {
+  try {
+    const tags = imageDb.getTagsWithCounts();
+    res.json(tags);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch tags' });
+  }
+});
+
+// Get all moods with photo counts
+router.get('/metadata/moods', (req, res) => {
+  try {
+    const moods = imageDb.getMoodsWithCounts();
+    res.json(moods);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch moods' });
+  }
+});
+
 // Get single image
 router.get('/:id', (req, res) => {
   try {

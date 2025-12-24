@@ -66,6 +66,8 @@ db.exec(`
     description TEXT,
     cover_image_id TEXT,
     page_format TEXT DEFAULT 'A4',
+    tags TEXT,
+    mood TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (cover_image_id) REFERENCES images(id) ON DELETE SET NULL
@@ -96,6 +98,19 @@ try {
   themes.forEach((theme, index) => {
     db.prepare('UPDATE themes SET position = ? WHERE id = ?').run(index, theme.id);
   });
+} catch {
+  // Column already exists, ignore error
+}
+
+// Migration: Add tags and mood columns to books if they don't exist
+try {
+  db.exec(`ALTER TABLE books ADD COLUMN tags TEXT`);
+} catch {
+  // Column already exists, ignore error
+}
+
+try {
+  db.exec(`ALTER TABLE books ADD COLUMN mood TEXT`);
 } catch {
   // Column already exists, ignore error
 }
@@ -160,6 +175,8 @@ export interface Book {
   description: string | null;
   cover_image_id: string | null;
   page_format: string;
+  tags: string | null;
+  mood: string | null;
   created_at: string;
   updated_at: string;
   page_count?: number;
@@ -367,6 +384,38 @@ export const imageDb = {
     if (ids.length === 0) return [];
     const placeholders = ids.map(() => '?').join(',');
     return db.prepare(`SELECT * FROM images WHERE id IN (${placeholders})`).all(...ids) as Image[];
+  },
+
+  getTagsWithCounts(): Array<{ tag: string; count: number }> {
+    const images = db.prepare('SELECT tags FROM images WHERE tags IS NOT NULL AND tags != ""').all() as { tags: string }[];
+    const tagCounts = new Map<string, number>();
+
+    images.forEach(image => {
+      try {
+        const tags = JSON.parse(image.tags) as string[];
+        tags.forEach(tag => {
+          tagCounts.set(tag, (tagCounts.get(tag) || 0) + 1);
+        });
+      } catch {
+        // Invalid JSON, skip
+      }
+    });
+
+    return Array.from(tagCounts.entries())
+      .map(([tag, count]) => ({ tag, count }))
+      .sort((a, b) => b.count - a.count);
+  },
+
+  getMoodsWithCounts(): Array<{ mood: string; count: number }> {
+    const moods = db.prepare(`
+      SELECT mood, COUNT(*) as count
+      FROM images
+      WHERE mood IS NOT NULL AND mood != ''
+      GROUP BY mood
+      ORDER BY count DESC
+    `).all() as Array<{ mood: string; count: number }>;
+
+    return moods;
   }
 };
 
@@ -671,9 +720,9 @@ export const bookDb = {
 
   create(book: Omit<Book, 'created_at' | 'updated_at' | 'page_count'>): Book {
     db.prepare(`
-      INSERT INTO books (id, name, description, cover_image_id, page_format)
-      VALUES (?, ?, ?, ?, ?)
-    `).run(book.id, book.name, book.description, book.cover_image_id, book.page_format);
+      INSERT INTO books (id, name, description, cover_image_id, page_format, tags, mood)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(book.id, book.name, book.description, book.cover_image_id, book.page_format, book.tags, book.mood);
     return this.getById(book.id)!;
   },
 
@@ -685,6 +734,8 @@ export const bookDb = {
     if (data.description !== undefined) { fields.push('description = ?'); values.push(data.description); }
     if (data.cover_image_id !== undefined) { fields.push('cover_image_id = ?'); values.push(data.cover_image_id); }
     if (data.page_format !== undefined) { fields.push('page_format = ?'); values.push(data.page_format); }
+    if (data.tags !== undefined) { fields.push('tags = ?'); values.push(data.tags); }
+    if (data.mood !== undefined) { fields.push('mood = ?'); values.push(data.mood); }
 
     if (fields.length === 0) return this.getById(id);
 
