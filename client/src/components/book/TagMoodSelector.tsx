@@ -73,7 +73,7 @@ export default function TagMoodSelector({
         <p className="text-xs text-gray-400 mb-3">
           Sélectionnez parmi les tags de vos photos pour pré-filtrer ce livre
         </p>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto">
           {availableTags.length === 0 ? (
             <p className="text-sm text-gray-400 italic">Aucun tag dans vos photos</p>
           ) : (
@@ -129,7 +129,7 @@ export default function TagMoodSelector({
         <p className="text-xs text-gray-400 mb-3">
           Sélectionnez parmi les humeurs de vos photos pour pré-filtrer ce livre
         </p>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto">
           {availableMoods.length === 0 ? (
             <p className="text-sm text-gray-400 italic">Aucune humeur dans vos photos</p>
           ) : (

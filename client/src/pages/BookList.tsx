@@ -211,12 +211,12 @@ export function BookList() {
       {/* Create Modal */}
       {showCreateModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80">
-          <div className="bg-gray-900 rounded-2xl w-full max-w-md">
+          <div className="bg-gray-900 rounded-2xl w-full max-w-md max-h-[90vh] flex flex-col">
             <div className="border-b border-gray-800 p-4">
               <h2 className="text-xl font-semibold">Nouveau book</h2>
             </div>
 
-            <form onSubmit={handleCreateBook} className="p-6">
+            <form onSubmit={handleCreateBook} className="p-6 overflow-y-auto">
               <div className="mb-4">
                 <label className="block text-sm font-medium text-gray-300 mb-2">
                   Nom du book

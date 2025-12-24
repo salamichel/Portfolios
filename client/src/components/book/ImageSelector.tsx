@@ -101,7 +101,7 @@ export function ImageSelector({ themes, onSelect, onGenerateSuggestions, onClose
     } finally {
       setLoading(false);
     }
-  }, [selectedThemeId, searchQuery, selectedTag, selectedMood, offset, bookTags, bookMoods, filterImagesByBookCriteria]);
+  }, [selectedThemeId, searchQuery, selectedTag, selectedMood, offset, bookTags, bookMoods]);
 
   // Load tags and moods
   useEffect(() => {
