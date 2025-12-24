@@ -104,7 +104,7 @@ export const booksApi = {
 
   getById: (id: string) => api.get<Book & { pages: BookPage[] }>(`/books/${id}`).then(res => res.data),
 
-  create: (data: { name: string; description?: string; page_format?: string }) =>
+  create: (data: { name: string; description?: string; page_format?: string; tags?: string; mood?: string }) =>
     api.post<Book>('/books', data).then(res => res.data),
 
   update: (id: string, data: Partial<Book>) =>
