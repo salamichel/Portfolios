@@ -398,7 +398,7 @@ export const imageDb = {
 
   getTagsWithCounts(): Array<{ tag: string; count: number }> {
     try {
-      const images = db.prepare('SELECT tags FROM images WHERE tags IS NOT NULL AND tags != ""').all() as { tags: string }[];
+      const images = db.prepare("SELECT tags FROM images WHERE tags IS NOT NULL AND tags != ''").all() as { tags: string }[];
       const tagCounts = new Map<string, number>();
 
       images.forEach(image => {
