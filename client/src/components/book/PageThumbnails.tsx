@@ -14,24 +14,38 @@ export function PageThumbnails({ pages, currentIndex, onSelectPage, onReorder }:
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
-  const handleDragStart = (index: number) => {
+  const handleDragStart = (e: React.DragEvent, index: number) => {
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/html', index.toString());
     setDraggedIndex(index);
   };
 
   const handleDragOver = (e: React.DragEvent, index: number) => {
     e.preventDefault();
+    e.stopPropagation();
     if (draggedIndex !== null && draggedIndex !== index) {
       setDragOverIndex(index);
     }
   };
 
-  const handleDragEnd = () => {
-    if (draggedIndex !== null && dragOverIndex !== null && draggedIndex !== dragOverIndex) {
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOverIndex(null);
+  };
+
+  const handleDrop = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (draggedIndex !== null && draggedIndex !== index) {
       const newPages = [...pages];
       const [draggedPage] = newPages.splice(draggedIndex, 1);
-      newPages.splice(dragOverIndex, 0, draggedPage);
+      newPages.splice(index, 0, draggedPage);
       onReorder(newPages.map(p => p.id));
     }
+  };
+
+  const handleDragEnd = () => {
     setDraggedIndex(null);
     setDragOverIndex(null);
   };
@@ -84,24 +98,26 @@ export function PageThumbnails({ pages, currentIndex, onSelectPage, onReorder }:
           <div
             key={page.id}
             draggable
-            onDragStart={() => handleDragStart(index)}
+            onDragStart={(e) => handleDragStart(e, index)}
             onDragOver={(e) => handleDragOver(e, index)}
+            onDragLeave={handleDragLeave}
+            onDrop={(e) => handleDrop(e, index)}
             onDragEnd={handleDragEnd}
             onClick={() => onSelectPage(index)}
             className={`
-              relative cursor-pointer rounded-lg overflow-hidden transition-all
+              relative cursor-pointer rounded-lg overflow-hidden transition-all select-none
               ${isSelected ? 'ring-2 ring-rose-500' : 'hover:ring-2 hover:ring-gray-600'}
               ${isDragging ? 'opacity-50' : ''}
               ${isDragOver ? 'ring-2 ring-blue-500' : ''}
             `}
           >
             {/* Drag handle */}
-            <div className="absolute top-1 left-1 z-10 p-1 bg-black/50 rounded cursor-grab active:cursor-grabbing">
+            <div className="absolute top-1 left-1 z-10 p-1 bg-black/50 rounded cursor-grab active:cursor-grabbing pointer-events-none">
               <GripVertical className="w-3 h-3 text-white" />
             </div>
 
             {/* Page number */}
-            <div className="absolute top-1 right-1 z-10 px-1.5 py-0.5 bg-black/50 rounded text-xs text-white">
+            <div className="absolute top-1 right-1 z-10 px-1.5 py-0.5 bg-black/50 rounded text-xs text-white pointer-events-none">
               {index + 1}
             </div>
 
@@ -128,7 +144,8 @@ export function PageThumbnails({ pages, currentIndex, onSelectPage, onReorder }:
                       <img
                         src={getThumbnailUrl(image.filename)}
                         alt=""
-                        className="w-full h-full object-cover"
+                        className="w-full h-full object-cover pointer-events-none"
+                        draggable={false}
                       />
                     )}
                   </div>
