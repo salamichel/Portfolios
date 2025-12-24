@@ -288,7 +288,7 @@ export const themeDb = {
 
 // Image operations
 export const imageDb = {
-  getAll(options: { theme_id?: string; limit?: number; offset?: number; search?: string } = {}): { images: Image[]; total: number } {
+  getAll(options: { theme_id?: string; limit?: number; offset?: number; search?: string; tag?: string; mood?: string } = {}): { images: Image[]; total: number } {
     let whereClause = '1=1';
     const params: any[] = [];
 
@@ -301,6 +301,16 @@ export const imageDb = {
       whereClause += ' AND (title LIKE ? OR description LIKE ? OR tags LIKE ? OR filename LIKE ? OR original_name LIKE ?)';
       const searchTerm = `%${options.search}%`;
       params.push(searchTerm, searchTerm, searchTerm, searchTerm, searchTerm);
+    }
+
+    if (options.tag) {
+      whereClause += ' AND tags LIKE ?';
+      params.push(`%${options.tag}%`);
+    }
+
+    if (options.mood) {
+      whereClause += ' AND mood = ?';
+      params.push(options.mood);
     }
 
     const total = db.prepare(`SELECT COUNT(*) as count FROM images WHERE ${whereClause}`).get(...params) as { count: number };
@@ -367,6 +377,46 @@ export const imageDb = {
     if (ids.length === 0) return [];
     const placeholders = ids.map(() => '?').join(',');
     return db.prepare(`SELECT * FROM images WHERE id IN (${placeholders})`).all(...ids) as Image[];
+  },
+
+  getAllTags(): string[] {
+    const images = db.prepare('SELECT tags FROM images WHERE tags IS NOT NULL').all() as { tags: string }[];
+    const tagsSet = new Set<string>();
+
+    for (const img of images) {
+      try {
+        const tags = JSON.parse(img.tags);
+        if (Array.isArray(tags)) {
+          tags.forEach(tag => {
+            if (tag && typeof tag === 'string') {
+              tagsSet.add(tag.trim());
+            }
+          });
+        }
+      } catch {
+        // Try comma-separated format
+        const tags = img.tags.split(',');
+        tags.forEach(tag => {
+          const trimmed = tag.trim();
+          if (trimmed) {
+            tagsSet.add(trimmed);
+          }
+        });
+      }
+    }
+
+    return Array.from(tagsSet).sort();
+  },
+
+  getAllMoods(): string[] {
+    const result = db.prepare(`
+      SELECT DISTINCT mood
+      FROM images
+      WHERE mood IS NOT NULL AND mood != ''
+      ORDER BY mood
+    `).all() as { mood: string }[];
+
+    return result.map(r => r.mood);
   }
 };
 
