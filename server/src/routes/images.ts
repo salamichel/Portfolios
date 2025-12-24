@@ -102,26 +102,46 @@ router.post('/upload', upload.array('images', 50), async (req, res) => {
       // Get image dimensions
       const metadata = await sharp(imagePath).metadata();
 
-      // Generate WebP thumbnail for gallery (400px)
+      // Generate WebP versions - wrap in try-catch to ensure we don't delete original if conversion fails
       const baseName = path.basename(file.filename, path.extname(file.filename));
       const thumbnailFilename = `thumb_${baseName}.webp`;
-      await sharp(imagePath)
-        .resize(400, 400, { fit: 'cover' })
-        .webp({ quality: 80 })
-        .toFile(path.join(thumbnailsDir, thumbnailFilename));
-
-      // Generate medium WebP for detail view (1024px)
       const mediumFilename = `medium_${baseName}.webp`;
-      await sharp(imagePath)
-        .resize(1024, 1024, { fit: 'inside', withoutEnlargement: true })
-        .webp({ quality: 85 })
-        .toFile(path.join(mediumDir, mediumFilename));
-
-      // Generate optimized WebP version of the full image
       const optimizedFilename = `${baseName}.webp`;
-      await sharp(imagePath)
-        .webp({ quality: 85 })
-        .toFile(path.join(optimizedDir, optimizedFilename));
+
+      const thumbnailPath = path.join(thumbnailsDir, thumbnailFilename);
+      const mediumPath = path.join(mediumDir, mediumFilename);
+      const optimizedPath = path.join(optimizedDir, optimizedFilename);
+
+      try {
+        console.log(`Converting ${file.filename} to WebP formats...`);
+
+        // Generate WebP thumbnail for gallery (400px)
+        await sharp(imagePath)
+          .resize(400, 400, { fit: 'cover' })
+          .webp({ quality: 80 })
+          .toFile(thumbnailPath);
+        console.log(`✓ Created thumbnail: ${thumbnailFilename}`);
+
+        // Generate medium WebP for detail view (1024px)
+        await sharp(imagePath)
+          .resize(1024, 1024, { fit: 'inside', withoutEnlargement: true })
+          .webp({ quality: 85 })
+          .toFile(mediumPath);
+        console.log(`✓ Created medium: ${mediumFilename}`);
+
+        // Generate optimized WebP version of the full image
+        await sharp(imagePath)
+          .webp({ quality: 85 })
+          .toFile(optimizedPath);
+        console.log(`✓ Created optimized: ${optimizedFilename}`);
+      } catch (conversionError) {
+        // If conversion fails, clean up any partial WebP files and keep the original
+        console.error(`✗ Failed to convert ${file.filename} to WebP:`, conversionError);
+        if (fs.existsSync(thumbnailPath)) fs.unlinkSync(thumbnailPath);
+        if (fs.existsSync(mediumPath)) fs.unlinkSync(mediumPath);
+        if (fs.existsSync(optimizedPath)) fs.unlinkSync(optimizedPath);
+        throw new Error(`Failed to convert image to WebP: ${conversionError}`);
+      }
 
       let enrichment = {
         title: null as string | null,
@@ -149,10 +169,20 @@ router.post('/upload', upload.array('images', 50), async (req, res) => {
       }
 
       // Delete heavy format files (like TIFF) after conversion to save space
+      // Only delete if all WebP versions were created successfully
       const isHeavyFormat = HEAVY_FORMATS.includes(file.mimetype);
       if (isHeavyFormat && fs.existsSync(imagePath)) {
-        fs.unlinkSync(imagePath);
-        console.log(`Deleted heavy format file: ${file.filename}`);
+        // Verify that all WebP files exist before deleting the original
+        const allWebPFilesExist = fs.existsSync(thumbnailPath) &&
+                                   fs.existsSync(mediumPath) &&
+                                   fs.existsSync(optimizedPath);
+
+        if (allWebPFilesExist) {
+          fs.unlinkSync(imagePath);
+          console.log(`Deleted heavy format file: ${file.filename} (WebP versions created successfully)`);
+        } else {
+          console.warn(`Keeping heavy format file: ${file.filename} (some WebP versions are missing)`);
+        }
       }
 
       const image = imageDb.create({
