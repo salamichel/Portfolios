@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { X, Search, Check, Wand2, Loader2, Sparkles } from 'lucide-react';
+import { X, Search, Check, Wand2, Loader2, Sparkles, Tag, Smile, CheckSquare, Square } from 'lucide-react';
 import { imagesApi, getThumbnailUrl } from '../../api/client';
 import type { Theme, Image } from '../../types';
 
@@ -19,7 +19,12 @@ export function ImageSelector({ themes, onSelect, onGenerateSuggestions, onClose
   const [generating, setGenerating] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedThemeId, setSelectedThemeId] = useState<string | null>(null);
+  const [selectedTag, setSelectedTag] = useState<string | null>(null);
+  const [selectedMood, setSelectedMood] = useState<string | null>(null);
+  const [availableTags, setAvailableTags] = useState<string[]>([]);
+  const [availableMoods, setAvailableMoods] = useState<string[]>([]);
   const [selectedImages, setSelectedImages] = useState<Set<string>>(new Set());
+  const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
   const [total, setTotal] = useState(0);
   const [offset, setOffset] = useState(0);
   const limit = 50;
@@ -76,6 +81,8 @@ export function ImageSelector({ themes, onSelect, onGenerateSuggestions, onClose
       const result = await imagesApi.getAll({
         theme_id: selectedThemeId || undefined,
         search: searchQuery || undefined,
+        tag: selectedTag || undefined,
+        mood: selectedMood || undefined,
         limit,
         offset
       });
@@ -94,30 +101,74 @@ export function ImageSelector({ themes, onSelect, onGenerateSuggestions, onClose
     } finally {
       setLoading(false);
     }
-  }, [selectedThemeId, searchQuery, offset, bookTags, bookMoods]);
+  }, [selectedThemeId, searchQuery, selectedTag, selectedMood, offset, bookTags, bookMoods, filterImagesByBookCriteria]);
+
+  // Load tags and moods
+  useEffect(() => {
+    const loadMetadata = async () => {
+      try {
+        const [tags, moods] = await Promise.all([
+          imagesApi.getAllTags(),
+          imagesApi.getAllMoods()
+        ]);
+        setAvailableTags(tags);
+        setAvailableMoods(moods);
+      } catch (error) {
+        console.error('Failed to load metadata:', error);
+      }
+    };
+    loadMetadata();
+  }, []);
 
   useEffect(() => {
     setOffset(0);
-  }, [selectedThemeId, searchQuery]);
+  }, [selectedThemeId, searchQuery, selectedTag, selectedMood]);
 
   useEffect(() => {
     loadImages();
   }, [loadImages]);
 
-  const handleImageClick = (image: Image) => {
+  const handleImageClick = (image: Image, event: React.MouseEvent) => {
     if (mode === 'single' && onSelect) {
       onSelect(image.id);
     } else {
-      setSelectedImages(prev => {
-        const newSet = new Set(prev);
-        if (newSet.has(image.id)) {
-          newSet.delete(image.id);
-        } else {
-          newSet.add(image.id);
+      const currentIndex = images.findIndex(img => img.id === image.id);
+
+      // Shift+Click: select range
+      if (event.shiftKey && lastSelectedIndex !== null && currentIndex !== -1) {
+        const start = Math.min(lastSelectedIndex, currentIndex);
+        const end = Math.max(lastSelectedIndex, currentIndex);
+        const newSet = new Set(selectedImages);
+        for (let i = start; i <= end; i++) {
+          newSet.add(images[i].id);
         }
-        return newSet;
-      });
+        setSelectedImages(newSet);
+      }
+      // Ctrl/Cmd+Click or regular click: toggle single
+      else {
+        setSelectedImages(prev => {
+          const newSet = new Set(prev);
+          if (newSet.has(image.id)) {
+            newSet.delete(image.id);
+          } else {
+            newSet.add(image.id);
+          }
+          return newSet;
+        });
+        setLastSelectedIndex(currentIndex);
+      }
     }
+  };
+
+  const handleSelectAll = () => {
+    const newSet = new Set(selectedImages);
+    images.forEach(img => newSet.add(img.id));
+    setSelectedImages(newSet);
+  };
+
+  const handleDeselectAll = () => {
+    setSelectedImages(new Set());
+    setLastSelectedIndex(null);
   };
 
   const handleConfirmSelection = () => {
@@ -166,46 +217,142 @@ export function ImageSelector({ themes, onSelect, onGenerateSuggestions, onClose
             </button>
           </div>
 
-          <div className="flex flex-wrap gap-4">
-            {/* Search */}
-            <div className="flex-1 min-w-[200px]">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Rechercher..."
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg pl-10 pr-4 py-2 text-white placeholder-gray-400 focus:outline-none focus:border-rose-500"
-                />
+          <div className="space-y-3">
+            {/* First row: Search and Theme */}
+            <div className="flex flex-wrap gap-3">
+              {/* Search */}
+              <div className="flex-1 min-w-[200px]">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Rechercher..."
+                    className="w-full bg-gray-800 border border-gray-700 rounded-lg pl-10 pr-4 py-2 text-white placeholder-gray-400 focus:outline-none focus:border-rose-500"
+                  />
+                </div>
+              </div>
+
+              {/* Theme filter */}
+              <select
+                value={selectedThemeId || ''}
+                onChange={(e) => setSelectedThemeId(e.target.value || null)}
+                className="bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-rose-500"
+              >
+                <option value="">Tous les thèmes</option>
+                {themes
+                  .filter(theme => (theme.image_count || 0) > 0)
+                  .map(theme => (
+                    <option key={theme.id} value={theme.id}>
+                      {theme.name} ({theme.image_count})
+                    </option>
+                  ))}
+              </select>
+            </div>
+
+            {/* Second row: Tag and Mood filters */}
+            <div className="flex flex-wrap gap-3">
+              {/* Tag filter */}
+              <div className="flex-1 min-w-[200px]">
+                <div className="relative">
+                  <Tag className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  <select
+                    value={selectedTag || ''}
+                    onChange={(e) => setSelectedTag(e.target.value || null)}
+                    className="w-full bg-gray-800 border border-gray-700 rounded-lg pl-10 pr-4 py-2 text-white focus:outline-none focus:border-rose-500 appearance-none cursor-pointer"
+                  >
+                    <option value="">Tous les tags</option>
+                    {availableTags.map(tag => (
+                      <option key={tag} value={tag}>{tag}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Mood filter */}
+              <div className="flex-1 min-w-[200px]">
+                <div className="relative">
+                  <Smile className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  <select
+                    value={selectedMood || ''}
+                    onChange={(e) => setSelectedMood(e.target.value || null)}
+                    className="w-full bg-gray-800 border border-gray-700 rounded-lg pl-10 pr-4 py-2 text-white focus:outline-none focus:border-rose-500 appearance-none cursor-pointer"
+                  >
+                    <option value="">Toutes les ambiances</option>
+                    {availableMoods.map(mood => (
+                      <option key={mood} value={mood}>{mood}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
             </div>
 
-            {/* Theme filter */}
-            <select
-              value={selectedThemeId || ''}
-              onChange={(e) => setSelectedThemeId(e.target.value || null)}
-              className="bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-rose-500"
-            >
-              <option value="">Tous les thèmes</option>
-              {themes
-                .filter(theme => (theme.image_count || 0) > 0)
-                .map(theme => (
-                  <option key={theme.id} value={theme.id}>
-                    {theme.name} ({theme.image_count})
-                  </option>
-                ))}
-            </select>
+            {/* Active filters indicator */}
+            {(selectedTag || selectedMood) && (
+              <div className="flex flex-wrap gap-2 items-center text-sm">
+                <span className="text-gray-400">Filtres actifs:</span>
+                {selectedTag && (
+                  <button
+                    onClick={() => setSelectedTag(null)}
+                    className="flex items-center gap-1 px-2 py-1 bg-blue-500/20 text-blue-400 rounded hover:bg-blue-500/30"
+                  >
+                    <Tag className="w-3 h-3" />
+                    {selectedTag}
+                    <X className="w-3 h-3" />
+                  </button>
+                )}
+                {selectedMood && (
+                  <button
+                    onClick={() => setSelectedMood(null)}
+                    className="flex items-center gap-1 px-2 py-1 bg-purple-500/20 text-purple-400 rounded hover:bg-purple-500/30"
+                  >
+                    <Smile className="w-3 h-3" />
+                    {selectedMood}
+                    <X className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
+            )}
           </div>
 
-          {mode === 'multiple' && selectedImages.size > 0 && (
-            <div className="mt-4 flex items-center justify-between bg-rose-500/10 rounded-lg px-4 py-2">
-              <span className="text-rose-400">
-                {selectedImages.size} image{selectedImages.size > 1 ? 's' : ''} sélectionnée{selectedImages.size > 1 ? 's' : ''}
-              </span>
+          {mode === 'multiple' && (
+            <div className="mt-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-gray-800/50 rounded-lg px-4 py-3">
+              <div className="flex items-center gap-3">
+                <span className="text-gray-300">
+                  {selectedImages.size > 0 ? (
+                    <>
+                      <span className="text-rose-400 font-semibold">{selectedImages.size}</span> image{selectedImages.size > 1 ? 's' : ''} sélectionnée{selectedImages.size > 1 ? 's' : ''}
+                    </>
+                  ) : (
+                    'Aucune image sélectionnée'
+                  )}
+                </span>
+                <div className="h-4 w-px bg-gray-700"></div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleSelectAll}
+                    disabled={images.length === 0}
+                    className="flex items-center gap-1 px-3 py-1 text-sm bg-gray-700 hover:bg-gray-600 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Tout sélectionner (cette page)"
+                  >
+                    <CheckSquare className="w-4 h-4" />
+                    Tout
+                  </button>
+                  <button
+                    onClick={handleDeselectAll}
+                    disabled={selectedImages.size === 0}
+                    className="flex items-center gap-1 px-3 py-1 text-sm bg-gray-700 hover:bg-gray-600 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Tout désélectionner"
+                  >
+                    <Square className="w-4 h-4" />
+                    Aucun
+                  </button>
+                </div>
+              </div>
               <button
                 onClick={handleConfirmSelection}
-                disabled={generating}
+                disabled={generating || selectedImages.size === 0}
                 className="flex items-center gap-2 px-4 py-2 bg-rose-500 hover:bg-rose-600 rounded-lg disabled:opacity-70 disabled:cursor-not-allowed"
               >
                 {generating ? (
@@ -242,7 +389,7 @@ export function ImageSelector({ themes, onSelect, onGenerateSuggestions, onClose
                   return (
                     <button
                       key={image.id}
-                      onClick={() => handleImageClick(image)}
+                      onClick={(e) => handleImageClick(image, e)}
                       className={`
                         relative aspect-square rounded-lg overflow-hidden group
                         ring-2 transition-all

@@ -56,12 +56,14 @@ const upload = multer({
 // Get all images with pagination
 router.get('/', (req, res) => {
   try {
-    const { theme_id, limit, offset, search } = req.query;
+    const { theme_id, limit, offset, search, tag, mood } = req.query;
     const result = imageDb.getAll({
       theme_id: theme_id as string,
       limit: limit ? parseInt(limit as string) : 50,
       offset: offset ? parseInt(offset as string) : 0,
-      search: search as string
+      search: search as string,
+      tag: tag as string,
+      mood: mood as string
     });
     res.json(result);
   } catch (error) {
@@ -83,6 +85,26 @@ router.get('/metadata/tags', (req, res) => {
 router.get('/metadata/moods', (req, res) => {
   try {
     const moods = imageDb.getMoodsWithCounts();
+    res.json(moods);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch moods' });
+  }
+});
+
+// Get all unique tags
+router.get('/meta/tags', (req, res) => {
+  try {
+    const tags = imageDb.getAllTags();
+    res.json(tags);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch tags' });
+  }
+});
+
+// Get all unique moods
+router.get('/meta/moods', (req, res) => {
+  try {
+    const moods = imageDb.getAllMoods();
     res.json(moods);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch moods' });

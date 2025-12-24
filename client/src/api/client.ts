@@ -28,10 +28,14 @@ export const themesApi = {
 
 // Images API
 export const imagesApi = {
-  getAll: (params?: { theme_id?: string; limit?: number; offset?: number; search?: string }) =>
+  getAll: (params?: { theme_id?: string; limit?: number; offset?: number; search?: string; tag?: string; mood?: string }) =>
     api.get<PaginatedImages>('/images', { params }).then(res => res.data),
 
   getById: (id: string) => api.get<Image>(`/images/${id}`).then(res => res.data),
+
+  getAllTags: () => api.get<string[]>('/images/meta/tags').then(res => res.data),
+
+  getAllMoods: () => api.get<string[]>('/images/meta/moods').then(res => res.data),
 
   upload: (
     files: File[],
