@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Loader2, Sparkles, Trash2, X, ChevronLeft, ChevronRight, Tag, Pencil, Save, XCircle, Info, Smile, Filter } from 'lucide-react';
+import { Loader2, Sparkles, Trash2, X, ChevronLeft, ChevronRight, Tag, Pencil, Save, XCircle, Info, Smile } from 'lucide-react';
 import { imagesApi, getMediumImageUrl, getThumbnailUrl } from '../api/client';
 import type { Image, Theme } from '../types';
 
@@ -28,7 +28,6 @@ export function ImageGallery({ themeId, themes, searchQuery, onImageUpdate }: Im
   const [editForm, setEditForm] = useState<EditFormData>({ title: '', description: '', mood: '', tags: '' });
   const [saving, setSaving] = useState(false);
   const [showMobileDetails, setShowMobileDetails] = useState(false);
-  const [showFilters, setShowFilters] = useState(false);
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [selectedMood, setSelectedMood] = useState<string | null>(null);
   const [availableTags, setAvailableTags] = useState<string[]>([]);
@@ -242,98 +241,78 @@ export function ImageGallery({ themeId, themes, searchQuery, onImageUpdate }: Im
 
   return (
     <>
-      {/* Filter toggle button */}
-      <div className="mb-4 flex items-center justify-between">
-        <div className="text-sm text-gray-400">
-          {total} image{total > 1 ? 's' : ''} {themeId ? 'dans ce thème' : 'au total'}
-        </div>
-        <button
-          onClick={() => setShowFilters(!showFilters)}
-          className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-colors ${
-            showFilters || selectedTag || selectedMood
-              ? 'bg-rose-500/20 text-rose-400'
-              : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-          }`}
-        >
-          <Filter className="w-4 h-4" />
-          Filtres avancés
-          {(selectedTag || selectedMood) && (
-            <span className="ml-1 px-1.5 py-0.5 bg-rose-500 text-white text-xs rounded-full">
-              {(selectedTag ? 1 : 0) + (selectedMood ? 1 : 0)}
-            </span>
-          )}
-        </button>
+      {/* Stats */}
+      <div className="mb-4 text-sm text-gray-400">
+        {total} image{total > 1 ? 's' : ''} {themeId ? 'dans ce thème' : 'au total'}
       </div>
 
-      {/* Advanced filters */}
-      {showFilters && (
-        <div className="mb-4 p-4 bg-gray-800 rounded-lg space-y-3">
-          <div className="flex flex-wrap gap-3">
-            {/* Tag filter */}
-            <div className="flex-1 min-w-[200px]">
-              <label className="block text-sm text-gray-400 mb-1">Tag</label>
-              <div className="relative">
-                <Tag className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <select
-                  value={selectedTag || ''}
-                  onChange={(e) => setSelectedTag(e.target.value || null)}
-                  className="w-full bg-gray-900 border border-gray-700 rounded-lg pl-9 pr-4 py-2 text-white focus:outline-none focus:border-rose-500 appearance-none cursor-pointer"
-                >
-                  <option value="">Tous les tags</option>
-                  {availableTags.map(tag => (
-                    <option key={tag} value={tag}>{tag}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            {/* Mood filter */}
-            <div className="flex-1 min-w-[200px]">
-              <label className="block text-sm text-gray-400 mb-1">Ambiance</label>
-              <div className="relative">
-                <Smile className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <select
-                  value={selectedMood || ''}
-                  onChange={(e) => setSelectedMood(e.target.value || null)}
-                  className="w-full bg-gray-900 border border-gray-700 rounded-lg pl-9 pr-4 py-2 text-white focus:outline-none focus:border-rose-500 appearance-none cursor-pointer"
-                >
-                  <option value="">Toutes les ambiances</option>
-                  {availableMoods.map(mood => (
-                    <option key={mood} value={mood}>{mood}</option>
-                  ))}
-                </select>
-              </div>
+      {/* Advanced filters - always visible */}
+      <div className="mb-4 p-4 bg-gray-800 rounded-lg space-y-3">
+        <div className="flex flex-wrap gap-3">
+          {/* Tag filter */}
+          <div className="flex-1 min-w-[200px]">
+            <label className="block text-sm text-gray-400 mb-1">Tag</label>
+            <div className="relative">
+              <Tag className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <select
+                value={selectedTag || ''}
+                onChange={(e) => setSelectedTag(e.target.value || null)}
+                className="w-full bg-gray-900 border border-gray-700 rounded-lg pl-9 pr-4 py-2 text-white focus:outline-none focus:border-rose-500 appearance-none cursor-pointer"
+              >
+                <option value="">Tous les tags</option>
+                {availableTags.map(tag => (
+                  <option key={tag} value={tag}>{tag}</option>
+                ))}
+              </select>
             </div>
           </div>
 
-          {/* Active filters */}
-          {(selectedTag || selectedMood) && (
-            <div className="flex flex-wrap gap-2 items-center pt-2 border-t border-gray-700">
-              <span className="text-sm text-gray-400">Actifs:</span>
-              {selectedTag && (
-                <button
-                  onClick={() => setSelectedTag(null)}
-                  className="flex items-center gap-1 px-2 py-1 bg-blue-500/20 text-blue-400 rounded text-sm hover:bg-blue-500/30"
-                >
-                  <Tag className="w-3 h-3" />
-                  {selectedTag}
-                  <X className="w-3 h-3" />
-                </button>
-              )}
-              {selectedMood && (
-                <button
-                  onClick={() => setSelectedMood(null)}
-                  className="flex items-center gap-1 px-2 py-1 bg-purple-500/20 text-purple-400 rounded text-sm hover:bg-purple-500/30"
-                >
-                  <Smile className="w-3 h-3" />
-                  {selectedMood}
-                  <X className="w-3 h-3" />
-                </button>
-              )}
+          {/* Mood filter */}
+          <div className="flex-1 min-w-[200px]">
+            <label className="block text-sm text-gray-400 mb-1">Ambiance</label>
+            <div className="relative">
+              <Smile className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <select
+                value={selectedMood || ''}
+                onChange={(e) => setSelectedMood(e.target.value || null)}
+                className="w-full bg-gray-900 border border-gray-700 rounded-lg pl-9 pr-4 py-2 text-white focus:outline-none focus:border-rose-500 appearance-none cursor-pointer"
+              >
+                <option value="">Toutes les ambiances</option>
+                {availableMoods.map(mood => (
+                  <option key={mood} value={mood}>{mood}</option>
+                ))}
+              </select>
             </div>
-          )}
+          </div>
         </div>
-      )}
+
+        {/* Active filters */}
+        {(selectedTag || selectedMood) && (
+          <div className="flex flex-wrap gap-2 items-center pt-2 border-t border-gray-700">
+            <span className="text-sm text-gray-400">Actifs:</span>
+            {selectedTag && (
+              <button
+                onClick={() => setSelectedTag(null)}
+                className="flex items-center gap-1 px-2 py-1 bg-blue-500/20 text-blue-400 rounded text-sm hover:bg-blue-500/30"
+              >
+                <Tag className="w-3 h-3" />
+                {selectedTag}
+                <X className="w-3 h-3" />
+              </button>
+            )}
+            {selectedMood && (
+              <button
+                onClick={() => setSelectedMood(null)}
+                className="flex items-center gap-1 px-2 py-1 bg-purple-500/20 text-purple-400 rounded text-sm hover:bg-purple-500/30"
+              >
+                <Smile className="w-3 h-3" />
+                {selectedMood}
+                <X className="w-3 h-3" />
+              </button>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* Grid */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
