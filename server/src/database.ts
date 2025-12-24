@@ -475,14 +475,14 @@ export const templateDb = {
       {
         id: 'tpl-grid-2x2',
         name: 'Grille 2x2',
-        description: 'Quatre images réparties sur les deux pages',
+        description: 'Quatre images réparties sur les deux pages en pleine page',
         is_predefined: true,
         layout: {
           slots: [
-            { id: 'left-top', type: 'image', page: 'left', x: 5, y: 5, width: 45, height: 45 },
-            { id: 'left-bottom', type: 'image', page: 'left', x: 5, y: 50, width: 45, height: 45 },
-            { id: 'right-top', type: 'image', page: 'right', x: 50, y: 5, width: 45, height: 45 },
-            { id: 'right-bottom', type: 'image', page: 'right', x: 50, y: 50, width: 45, height: 45 }
+            { id: 'left-top', type: 'image', page: 'left', x: 0, y: 0, width: 100, height: 49 },
+            { id: 'left-bottom', type: 'image', page: 'left', x: 0, y: 51, width: 100, height: 49 },
+            { id: 'right-top', type: 'image', page: 'right', x: 0, y: 0, width: 100, height: 49 },
+            { id: 'right-bottom', type: 'image', page: 'right', x: 0, y: 51, width: 100, height: 49 }
           ]
         }
       },
