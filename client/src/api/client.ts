@@ -122,6 +122,9 @@ export const booksApi = {
   deletePage: (bookId: string, pageId: string) =>
     api.delete(`/books/${bookId}/pages/${pageId}`),
 
+  bulkDeletePages: (bookId: string, ids: string[]) =>
+    api.delete<{ deleted: number }>(`/books/${bookId}/pages`, { data: { ids } }).then(res => res.data),
+
   reorderPages: (bookId: string, orderedIds: string[]) =>
     api.put<BookPage[]>(`/books/${bookId}/pages/reorder`, { orderedIds }).then(res => res.data),
 

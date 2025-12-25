@@ -939,6 +939,13 @@ export const bookPageDb = {
     return result.changes > 0;
   },
 
+  bulkDelete(bookId: string, ids: string[]): number {
+    if (ids.length === 0) return 0;
+    const placeholders = ids.map(() => '?').join(',');
+    const result = db.prepare(`DELETE FROM book_pages WHERE book_id = ? AND id IN (${placeholders})`).run(bookId, ...ids);
+    return result.changes;
+  },
+
   reorder(bookId: string, orderedIds: string[]): void {
     const stmt = db.prepare('UPDATE book_pages SET position = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND book_id = ?');
     const transaction = db.transaction((ids: string[]) => {

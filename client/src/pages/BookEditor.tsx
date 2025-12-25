@@ -25,6 +25,10 @@ export function BookEditor() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
+  // Multi-select for bulk delete
+  const [selectedPageIds, setSelectedPageIds] = useState<Set<string>>(new Set());
+  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
+
   // Modals
   const [showImageSelector, setShowImageSelector] = useState(false);
   const [showTemplateSelector, setShowTemplateSelector] = useState(false);
@@ -102,6 +106,26 @@ export function BookEditor() {
       }
     } catch (error) {
       console.error('Failed to delete page:', error);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (!id || selectedPageIds.size === 0) return;
+
+    try {
+      setSaving(true);
+      await booksApi.bulkDeletePages(id, Array.from(selectedPageIds));
+      const newPages = pages.filter(p => !selectedPageIds.has(p.id));
+      setPages(newPages);
+      setSelectedPageIds(new Set());
+      setShowBulkDeleteConfirm(false);
+      if (currentPageIndex >= newPages.length) {
+        setCurrentPageIndex(Math.max(0, newPages.length - 1));
+      }
+    } catch (error) {
+      console.error('Failed to bulk delete pages:', error);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -363,6 +387,9 @@ export function BookEditor() {
             currentIndex={currentPageIndex}
             onSelectPage={setCurrentPageIndex}
             onReorder={handleReorderPages}
+            selectedIds={selectedPageIds}
+            onSelectionChange={setSelectedPageIds}
+            onBulkDelete={() => setShowBulkDeleteConfirm(true)}
           />
         </aside>
 
@@ -564,6 +591,34 @@ export function BookEditor() {
           initialPageIndex={currentPageIndex}
           onClose={() => setShowSlideshow(false)}
         />
+      )}
+
+      {/* Bulk Delete Confirmation Modal */}
+      {showBulkDeleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80">
+          <div className="bg-gray-900 rounded-xl p-6 w-full max-w-md">
+            <h3 className="text-lg font-semibold mb-2">Supprimer {selectedPageIds.size} page{selectedPageIds.size > 1 ? 's' : ''} ?</h3>
+            <p className="text-gray-400 mb-6">
+              Cette action est irréversible. Les pages sélectionnées seront définitivement supprimées.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setShowBulkDeleteConfirm(false)}
+                className="px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors"
+                disabled={saving}
+              >
+                Annuler
+              </button>
+              <button
+                onClick={handleBulkDelete}
+                disabled={saving}
+                className="px-4 py-2 bg-red-500 hover:bg-red-600 rounded-lg transition-colors disabled:opacity-50"
+              >
+                {saving ? 'Suppression...' : 'Supprimer'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Saving indicator */}
