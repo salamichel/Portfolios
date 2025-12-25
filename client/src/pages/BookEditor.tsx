@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import {
   ArrowLeft, Plus, Trash2, Wand2, ChevronLeft, ChevronRight,
-  LayoutGrid, BookOpen, Presentation, Type
+  LayoutGrid, BookOpen, Presentation, Type, Settings
 } from 'lucide-react';
 import { booksApi, templatesApi, themesApi } from '../api/client';
 import type { Book, BookPage, PageTemplate, Theme, LayoutSuggestion, Image, SlotAnnotation, TextSlotData } from '../types';
@@ -13,6 +13,7 @@ import { PageThumbnails } from '../components/book/PageThumbnails';
 import { AnnotationEditor } from '../components/book/AnnotationEditor';
 import { TextSlotEditor } from '../components/book/TextSlotEditor';
 import { BookSlideshow } from '../components/book/BookSlideshow';
+import { BookInfoEditor } from '../components/book/BookInfoEditor';
 
 export function BookEditor() {
   const { id } = useParams<{ id: string }>();
@@ -45,6 +46,9 @@ export function BookEditor() {
 
   // Slideshow
   const [showSlideshow, setShowSlideshow] = useState(false);
+
+  // Book info editor
+  const [showBookInfoEditor, setShowBookInfoEditor] = useState(false);
 
   // AI suggestions
   const [showAISuggestions, setShowAISuggestions] = useState(false);
@@ -346,6 +350,13 @@ export function BookEditor() {
               <h1 className="text-xl font-bold">{book.name}</h1>
               <p className="text-sm text-gray-400">{pages.length} page{pages.length > 1 ? 's' : ''}</p>
             </div>
+            <button
+              onClick={() => setShowBookInfoEditor(true)}
+              className="p-2 hover:bg-gray-800 rounded-lg transition-colors"
+              title="Modifier les infos du book"
+            >
+              <Settings className="w-5 h-5 text-gray-400" />
+            </button>
           </div>
 
           <div className="flex items-center gap-2">
@@ -621,6 +632,16 @@ export function BookEditor() {
           templates={templates}
           initialPageIndex={currentPageIndex}
           onClose={() => setShowSlideshow(false)}
+        />
+      )}
+
+      {/* Book Info Editor */}
+      {showBookInfoEditor && book && (
+        <BookInfoEditor
+          book={book}
+          pages={pages}
+          onSave={(updatedBook) => setBook(updatedBook)}
+          onClose={() => setShowBookInfoEditor(false)}
         />
       )}
 
