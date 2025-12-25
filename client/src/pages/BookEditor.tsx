@@ -514,19 +514,26 @@ export function BookEditor() {
                     </div>
                     <p className="text-xs text-gray-400 mb-2">{suggestion.reasoning}</p>
                     {suggestion.text_zones && suggestion.text_zones.length > 0 && (
-                      <div className="mt-2 pt-2 border-t border-gray-700">
-                        <div className="text-xs text-gray-500 mb-1">Zones de texte :</div>
-                        <div className="flex flex-wrap gap-1">
-                          {suggestion.text_zones.map((zone) => (
-                            <span
-                              key={zone.slot_id}
-                              className="text-xs px-2 py-0.5 bg-gray-700 text-gray-300 rounded"
-                              title={zone.description}
-                            >
-                              {zone.description}
-                            </span>
-                          ))}
-                        </div>
+                      <div className="mt-2 pt-2 border-t border-gray-700 space-y-2">
+                        <div className="text-xs text-gray-500">Zones de texte :</div>
+                        {suggestion.text_zones.map((zone) => (
+                          <div
+                            key={zone.slot_id}
+                            className="text-xs bg-gray-700/50 rounded p-2"
+                          >
+                            <div className="flex items-center gap-1 text-gray-400 mb-1">
+                              <Type className="w-3 h-3" />
+                              <span>{zone.description}</span>
+                            </div>
+                            {zone.suggested_content ? (
+                              <p className="text-gray-200 italic line-clamp-2">
+                                "{zone.suggested_content}"
+                              </p>
+                            ) : (
+                              <p className="text-gray-500 italic">À compléter...</p>
+                            )}
+                          </div>
+                        ))}
                       </div>
                     )}
                   </div>
