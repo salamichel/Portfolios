@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import {
   ArrowLeft, Plus, Trash2, Wand2, ChevronLeft, ChevronRight,
-  LayoutGrid, BookOpen, Presentation
+  LayoutGrid, BookOpen, Presentation, Type
 } from 'lucide-react';
 import { booksApi, templatesApi, themesApi } from '../api/client';
 import type { Book, BookPage, PageTemplate, Theme, LayoutSuggestion, Image, SlotAnnotation, TextSlotData } from '../types';
@@ -530,8 +530,39 @@ export function BookEditor() {
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
                 {suggestions.map((suggestion, index) => (
                   <div key={index} className="bg-gray-800 rounded-lg p-3">
-                    <div className="text-sm font-medium mb-2">{suggestion.template_name}</div>
-                    <p className="text-xs text-gray-400">{suggestion.reasoning}</p>
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-sm font-medium">{suggestion.template_name}</span>
+                      {suggestion.text_zones && suggestion.text_zones.length > 0 && (
+                        <span className="flex items-center gap-1 px-2 py-0.5 bg-emerald-500/20 text-emerald-400 rounded-full text-xs">
+                          <Type className="w-3 h-3" />
+                          {suggestion.text_zones.length}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-gray-400 mb-2">{suggestion.reasoning}</p>
+                    {suggestion.text_zones && suggestion.text_zones.length > 0 && (
+                      <div className="mt-2 pt-2 border-t border-gray-700 space-y-2">
+                        <div className="text-xs text-gray-500">Zones de texte :</div>
+                        {suggestion.text_zones.map((zone) => (
+                          <div
+                            key={zone.slot_id}
+                            className="text-xs bg-gray-700/50 rounded p-2"
+                          >
+                            <div className="flex items-center gap-1 text-gray-400 mb-1">
+                              <Type className="w-3 h-3" />
+                              <span>{zone.description}</span>
+                            </div>
+                            {zone.suggested_content ? (
+                              <p className="text-gray-200 italic line-clamp-2">
+                                "{zone.suggested_content}"
+                              </p>
+                            ) : (
+                              <p className="text-gray-500 italic">À compléter...</p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

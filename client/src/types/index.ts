@@ -141,12 +141,19 @@ export interface BookPage {
   images?: Image[];
 }
 
+export interface TextZoneInfo {
+  slot_id: string;
+  description: string;
+  suggested_content?: string;
+}
+
 export interface LayoutSuggestion {
   template_id: string;
   template_name: string;
   page_data: PageData;
   position: number;
   reasoning: string;
+  text_zones?: TextZoneInfo[];
 }
 
 export interface BookLayoutSuggestions {
