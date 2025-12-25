@@ -108,6 +108,37 @@ export function ImageGallery({ themeId, themes, searchQuery, onImageUpdate }: Im
     return () => observerRef.current?.disconnect();
   }, [hasMore, loading, loadImages]);
 
+  // Keyboard shortcuts for lightbox navigation
+  useEffect(() => {
+    if (!selectedImage) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't handle shortcuts when typing in input fields
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT') {
+        return;
+      }
+
+      switch (e.key) {
+        case 'ArrowLeft':
+          e.preventDefault();
+          navigateImage('prev');
+          break;
+        case 'ArrowRight':
+          e.preventDefault();
+          navigateImage('next');
+          break;
+        case 'Escape':
+          e.preventDefault();
+          closeLightbox();
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedImage, images, isEditing]);
+
   const handleEnrich = async (image: Image) => {
     setEnriching(image.id);
     try {
