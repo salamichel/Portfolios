@@ -161,16 +161,16 @@ function generateTextContent(
     } else if (slotId.includes('caption') || slotId.includes('legend')) {
       // Combine image titles for caption
       const titles = assignedImages
-        .filter(img => img.title)
-        .map(img => img.title);
+        .filter((img: Image) => img.title)
+        .map((img: Image) => img.title);
       if (titles.length > 0) {
         suggested_content = titles.join(' • ');
       }
     } else if (slotId.includes('description') || slotId.includes('desc')) {
       // Use first image description or combine descriptions
       const descriptions = assignedImages
-        .filter(img => img.description)
-        .map(img => img.description);
+        .filter((img: Image) => img.description)
+        .map((img: Image) => img.description);
       if (descriptions.length > 0) {
         suggested_content = descriptions.join('\n\n');
       }
@@ -436,8 +436,8 @@ IMPORTANT: Pour "text_content", utilise les slot_id des zones de texte du templa
 
     // Get assigned images for fallback content generation
     const assignedImages = suggestion.image_ids
-      .map((id: string) => images.find(img => img.id === id))
-      .filter((img): img is Image => img !== undefined);
+      .map((id: string) => images.find((img: Image) => img.id === id))
+      .filter((img: Image | undefined): img is Image => img !== undefined);
 
     // Build text zones with suggested content from AI or fallback
     const textZones: TextZoneInfo[] = textSlots.map(slot => {
@@ -515,7 +515,7 @@ function getHeuristicSuggestions(
   let position = 0;
 
   // Create a map from analysis ID to full image
-  const imageMap = new Map(images.map(img => [img.id, img]));
+  const imageMap = new Map(images.map((img: Image) => [img.id, img]));
 
   // Group by mood for coherent spreads
   const moodGroups = groupImagesByCharacteristics(remainingAnalyses);
@@ -542,8 +542,8 @@ function getHeuristicSuggestions(
 
       // Get full images for content generation
       const assignedFullImages = assignedAnalyses
-        .map(a => imageMap.get(a.id))
-        .filter((img): img is Image => img !== undefined);
+        .map((a: ImageAnalysis) => imageMap.get(a.id))
+        .filter((img: Image | undefined): img is Image => img !== undefined);
 
       // Generate text content for this page
       const textZonesWithContent = generateTextContent(template, assignedFullImages, {
@@ -591,7 +591,7 @@ function getHeuristicSuggestions(
 
       // Remove assigned images
       const assignedIds = new Set(assignedAnalyses.map(a => a.id));
-      moodRemaining = moodRemaining.filter(img => !assignedIds.has(img.id));
+      moodRemaining = moodRemaining.filter((img: ImageAnalysis) => !assignedIds.has(img.id));
       isFirstInMood = false;
     }
 
