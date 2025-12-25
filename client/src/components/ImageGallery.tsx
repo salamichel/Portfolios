@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Loader2, Sparkles, Trash2, X, ChevronLeft, ChevronRight, Tag, Pencil, Save, XCircle, Info, Smile } from 'lucide-react';
+import { Loader2, Sparkles, Trash2, X, ChevronLeft, ChevronRight, Tag, Pencil, Save, XCircle, Info, Smile, BookOpen } from 'lucide-react';
 import { imagesApi, getMediumImageUrl, getThumbnailUrl } from '../api/client';
 import type { Image, Theme } from '../types';
+import { CreateBookFromPhotoModal } from './book/CreateBookFromPhotoModal';
 
 interface EditFormData {
   title: string;
@@ -32,6 +33,7 @@ export function ImageGallery({ themeId, themes, searchQuery, onImageUpdate }: Im
   const [selectedMood, setSelectedMood] = useState<string | null>(null);
   const [availableTags, setAvailableTags] = useState<string[]>([]);
   const [availableMoods, setAvailableMoods] = useState<string[]>([]);
+  const [showCreateBookModal, setShowCreateBookModal] = useState(false);
   const observerRef = useRef<IntersectionObserver | null>(null);
   const loadMoreRef = useRef<HTMLDivElement>(null);
 
@@ -465,6 +467,14 @@ export function ImageGallery({ themeId, themes, searchQuery, onImageUpdate }: Im
             )}
 
             <button
+              onClick={() => setShowCreateBookModal(true)}
+              className="flex flex-col items-center gap-1 text-indigo-400 hover:text-indigo-300"
+            >
+              <BookOpen className="w-5 h-5" />
+              <span className="text-xs">Book</span>
+            </button>
+
+            <button
               onClick={() => handleDelete(selectedImage)}
               className="flex flex-col items-center gap-1 text-red-400 hover:text-red-300"
             >
@@ -811,6 +821,14 @@ export function ImageGallery({ themeId, themes, searchQuery, onImageUpdate }: Im
             {/* Actions - hidden when editing */}
             {!isEditing && (
               <div className="space-y-2">
+                <button
+                  onClick={() => setShowCreateBookModal(true)}
+                  className="w-full flex items-center justify-center gap-2 bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-400 py-2 px-4 rounded-lg transition-colors"
+                >
+                  <BookOpen className="w-4 h-4" />
+                  Créer un book
+                </button>
+
                 {!selectedImage.ai_enriched && (
                   <button
                     onClick={() => handleEnrich(selectedImage)}
@@ -837,6 +855,14 @@ export function ImageGallery({ themeId, themes, searchQuery, onImageUpdate }: Im
             )}
           </div>
         </div>
+      )}
+
+      {/* Create Book from Photo Modal */}
+      {showCreateBookModal && selectedImage && (
+        <CreateBookFromPhotoModal
+          image={selectedImage}
+          onClose={() => setShowCreateBookModal(false)}
+        />
       )}
     </>
   );
