@@ -33,7 +33,7 @@ router.get('/:id', (req, res) => {
 // Create book
 router.post('/', (req, res) => {
   try {
-    const { name, description, page_format } = req.body;
+    const { name, description, page_format, tags, mood } = req.body;
 
     if (!name || typeof name !== 'string' || name.trim().length === 0) {
       return res.status(400).json({ error: 'Book name is required' });
@@ -44,7 +44,9 @@ router.post('/', (req, res) => {
       name: name.trim(),
       description: description?.trim() || null,
       cover_image_id: null,
-      page_format: page_format || 'A4'
+      page_format: page_format || 'A4',
+      tags: tags || null,
+      mood: mood || null
     });
 
     res.status(201).json(book);

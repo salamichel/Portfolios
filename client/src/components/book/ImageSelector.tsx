@@ -9,16 +9,25 @@ interface ImageSelectorProps {
   onGenerateSuggestions?: (imageIds: string[]) => void;
   onClose: () => void;
   mode: 'single' | 'multiple';
+  bookTags?: string[] | null;
+  bookMoods?: string[] | null;
 }
 
-export function ImageSelector({ themes, onSelect, onGenerateSuggestions, onClose, mode }: ImageSelectorProps) {
+export function ImageSelector({ themes, onSelect, onGenerateSuggestions, onClose, mode, bookTags, bookMoods }: ImageSelectorProps) {
   const [images, setImages] = useState<Image[]>([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedThemeId, setSelectedThemeId] = useState<string | null>(null);
-  const [selectedTag, setSelectedTag] = useState<string | null>(null);
-  const [selectedMood, setSelectedMood] = useState<string | null>(null);
+
+  // Initialize filters with book's tags/moods if available
+  const [selectedTag, setSelectedTag] = useState<string | null>(
+    bookTags && bookTags.length > 0 ? bookTags[0] : null
+  );
+  const [selectedMood, setSelectedMood] = useState<string | null>(
+    bookMoods && bookMoods.length > 0 ? bookMoods[0] : null
+  );
+
   const [availableTags, setAvailableTags] = useState<string[]>([]);
   const [availableMoods, setAvailableMoods] = useState<string[]>([]);
   const [selectedImages, setSelectedImages] = useState<Set<string>>(new Set());
@@ -38,6 +47,7 @@ export function ImageSelector({ themes, onSelect, onGenerateSuggestions, onClose
         limit,
         offset
       });
+
       if (offset === 0) {
         setImages(result.images);
       } else {
@@ -138,9 +148,30 @@ export function ImageSelector({ themes, onSelect, onGenerateSuggestions, onClose
         {/* Header */}
         <div className="flex-shrink-0 border-b border-gray-800 p-4">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold">
-              {mode === 'single' ? 'Choisir une image' : 'Sélectionner des images pour l\'assistant IA'}
-            </h2>
+            <div>
+              <h2 className="text-xl font-semibold">
+                {mode === 'single' ? 'Choisir une image' : 'Sélectionner des images pour l\'assistant IA'}
+              </h2>
+              {((bookTags && bookTags.length > 0) || (bookMoods && bookMoods.length > 0)) && (
+                <div className="flex flex-wrap gap-2 mt-2">
+                  <div className="text-xs text-gray-400">
+                    Filtre pré-appliqué du book:
+                  </div>
+                  {bookTags && bookTags.length > 0 && (
+                    <div className="text-xs text-blue-400 bg-blue-500/10 px-2 py-1 rounded-full flex items-center gap-1">
+                      <Tag className="w-3 h-3" />
+                      {bookTags.join(', ')}
+                    </div>
+                  )}
+                  {bookMoods && bookMoods.length > 0 && (
+                    <div className="text-xs text-purple-400 bg-purple-500/10 px-2 py-1 rounded-full flex items-center gap-1">
+                      <Smile className="w-3 h-3" />
+                      {bookMoods.join(', ')}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
             <button
               onClick={onClose}
               className="p-2 hover:bg-gray-800 rounded-lg"

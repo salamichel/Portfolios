@@ -71,6 +71,32 @@ router.get('/', (req, res) => {
   }
 });
 
+// Get all tags with photo counts
+router.get('/metadata/tags', (req, res) => {
+  try {
+    console.log('[API] GET /metadata/tags called');
+    const tags = imageDb.getTagsWithCounts();
+    console.log('[API] Returning tags:', tags.length, 'tags');
+    res.json(tags);
+  } catch (error) {
+    console.error('[API] Error fetching tags:', error);
+    res.status(500).json({ error: 'Failed to fetch tags' });
+  }
+});
+
+// Get all moods with photo counts
+router.get('/metadata/moods', (req, res) => {
+  try {
+    console.log('[API] GET /metadata/moods called');
+    const moods = imageDb.getMoodsWithCounts();
+    console.log('[API] Returning moods:', moods.length, 'moods');
+    res.json(moods);
+  } catch (error) {
+    console.error('[API] Error fetching moods:', error);
+    res.status(500).json({ error: 'Failed to fetch moods' });
+  }
+});
+
 // Get all unique tags
 router.get('/meta/tags', (req, res) => {
   try {

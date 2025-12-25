@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Plus, BookOpen, Trash2, Edit2, ArrowLeft, Calendar, FileText } from 'lucide-react';
 import { booksApi, getThumbnailUrl } from '../api/client';
 import type { Book } from '../types';
+import TagMoodSelector from '../components/book/TagMoodSelector';
 
 export function BookList() {
   const [books, setBooks] = useState<Book[]>([]);
@@ -10,6 +11,8 @@ export function BookList() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newBookName, setNewBookName] = useState('');
   const [newBookDescription, setNewBookDescription] = useState('');
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [selectedMoods, setSelectedMoods] = useState<string[]>([]);
   const [creating, setCreating] = useState(false);
 
   const loadBooks = useCallback(async () => {
@@ -36,12 +39,16 @@ export function BookList() {
       setCreating(true);
       const book = await booksApi.create({
         name: newBookName.trim(),
-        description: newBookDescription.trim() || undefined
+        description: newBookDescription.trim() || undefined,
+        tags: selectedTags.length > 0 ? JSON.stringify(selectedTags) : undefined,
+        mood: selectedMoods.length > 0 ? JSON.stringify(selectedMoods) : undefined
       });
       setBooks([book, ...books]);
       setShowCreateModal(false);
       setNewBookName('');
       setNewBookDescription('');
+      setSelectedTags([]);
+      setSelectedMoods([]);
     } catch (error) {
       console.error('Failed to create book:', error);
     } finally {
@@ -204,12 +211,12 @@ export function BookList() {
       {/* Create Modal */}
       {showCreateModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80">
-          <div className="bg-gray-900 rounded-2xl w-full max-w-md">
+          <div className="bg-gray-900 rounded-2xl w-full max-w-md max-h-[90vh] flex flex-col">
             <div className="border-b border-gray-800 p-4">
               <h2 className="text-xl font-semibold">Nouveau book</h2>
             </div>
 
-            <form onSubmit={handleCreateBook} className="p-6">
+            <form onSubmit={handleCreateBook} className="p-6 overflow-y-auto">
               <div className="mb-4">
                 <label className="block text-sm font-medium text-gray-300 mb-2">
                   Nom du book
@@ -234,6 +241,15 @@ export function BookList() {
                   placeholder="Une brève description..."
                   rows={3}
                   className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white placeholder-gray-400 focus:outline-none focus:border-rose-500 resize-none"
+                />
+              </div>
+
+              <div className="mb-6">
+                <TagMoodSelector
+                  selectedTags={selectedTags}
+                  selectedMoods={selectedMoods}
+                  onTagsChange={setSelectedTags}
+                  onMoodsChange={setSelectedMoods}
                 />
               </div>
 
