@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { GripVertical, Plus } from 'lucide-react';
+import { GripVertical, Plus, Trash2 } from 'lucide-react';
 import { getThumbnailUrl } from '../../api/client';
 import type { BookPage, LayoutSlot } from '../../types';
 
@@ -8,11 +8,33 @@ interface PageThumbnailsProps {
   currentIndex: number;
   onSelectPage: (index: number) => void;
   onReorder: (newOrder: string[]) => void;
+  selectedIds: Set<string>;
+  onSelectionChange: (ids: Set<string>) => void;
+  onBulkDelete: () => void;
 }
 
-export function PageThumbnails({ pages, currentIndex, onSelectPage, onReorder }: PageThumbnailsProps) {
+export function PageThumbnails({ pages, currentIndex, onSelectPage, onReorder, selectedIds, onSelectionChange, onBulkDelete }: PageThumbnailsProps) {
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+
+  const handleToggleSelect = (e: React.MouseEvent, pageId: string) => {
+    e.stopPropagation();
+    const newSelected = new Set(selectedIds);
+    if (newSelected.has(pageId)) {
+      newSelected.delete(pageId);
+    } else {
+      newSelected.add(pageId);
+    }
+    onSelectionChange(newSelected);
+  };
+
+  const handleSelectAll = () => {
+    if (selectedIds.size === pages.length) {
+      onSelectionChange(new Set());
+    } else {
+      onSelectionChange(new Set(pages.map(p => p.id)));
+    }
+  };
 
   const handleDragStart = (e: React.DragEvent, index: number) => {
     e.dataTransfer.effectAllowed = 'move';
@@ -84,7 +106,30 @@ export function PageThumbnails({ pages, currentIndex, onSelectPage, onReorder }:
 
   return (
     <div className="space-y-3">
-      <h3 className="text-sm font-medium text-gray-400 uppercase tracking-wide">Pages</h3>
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-medium text-gray-400 uppercase tracking-wide">Pages</h3>
+        {pages.length > 0 && (
+          <label className="flex items-center gap-1.5 cursor-pointer text-xs text-gray-400 hover:text-gray-300">
+            <input
+              type="checkbox"
+              checked={selectedIds.size === pages.length && pages.length > 0}
+              onChange={handleSelectAll}
+              className="w-3 h-3 rounded border-gray-600 bg-gray-800 text-rose-500 focus:ring-rose-500 focus:ring-offset-0"
+            />
+            Tout
+          </label>
+        )}
+      </div>
+
+      {selectedIds.size > 0 && (
+        <button
+          onClick={onBulkDelete}
+          className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg text-sm transition-colors"
+        >
+          <Trash2 className="w-4 h-4" />
+          Supprimer ({selectedIds.size})
+        </button>
+      )}
 
       {pages.map((page, index) => {
         const isSelected = index === currentIndex;
@@ -119,6 +164,19 @@ export function PageThumbnails({ pages, currentIndex, onSelectPage, onReorder }:
             {/* Page number */}
             <div className="absolute top-1 right-1 z-10 px-1.5 py-0.5 bg-black/50 rounded text-xs text-white pointer-events-none">
               {index + 1}
+            </div>
+
+            {/* Selection checkbox */}
+            <div
+              className="absolute bottom-1 left-1 z-10"
+              onClick={(e) => handleToggleSelect(e, page.id)}
+            >
+              <input
+                type="checkbox"
+                checked={selectedIds.has(page.id)}
+                onChange={() => {}}
+                className="w-4 h-4 rounded border-gray-600 bg-gray-800/80 text-rose-500 focus:ring-rose-500 focus:ring-offset-0 cursor-pointer"
+              />
             </div>
 
             {/* Mini preview */}

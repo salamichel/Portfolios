@@ -148,6 +148,22 @@ router.delete('/:bookId/pages/:pageId', (req, res) => {
   }
 });
 
+// Bulk delete pages
+router.delete('/:bookId/pages', (req, res) => {
+  try {
+    const { ids } = req.body;
+
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'ids array is required' });
+    }
+
+    const deleted = bookPageDb.bulkDelete(req.params.bookId, ids);
+    res.json({ deleted });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to delete pages' });
+  }
+});
+
 // Reorder pages
 router.put('/:bookId/pages/reorder', (req, res) => {
   try {
