@@ -29,52 +29,6 @@ export function ImageSelector({ themes, onSelect, onGenerateSuggestions, onClose
   const [offset, setOffset] = useState(0);
   const limit = 50;
 
-  // Filter images by book tags/moods
-  const filterImagesByBookCriteria = (image: Image): boolean => {
-    // If no filters are set, show all images
-    if ((!bookTags || bookTags.length === 0) && (!bookMoods || bookMoods.length === 0)) {
-      return true;
-    }
-
-    let matchesTags = true;
-    let matchesMoods = true;
-
-    // Check tags
-    if (bookTags && bookTags.length > 0) {
-      if (!image.tags) {
-        matchesTags = false;
-      } else {
-        try {
-          const imageTags = JSON.parse(image.tags) as string[];
-          matchesTags = bookTags.some(tag => imageTags.includes(tag));
-        } catch {
-          matchesTags = false;
-        }
-      }
-    }
-
-    // Check moods
-    if (bookMoods && bookMoods.length > 0) {
-      if (!image.mood) {
-        matchesMoods = false;
-      } else {
-        matchesMoods = bookMoods.includes(image.mood);
-      }
-    }
-
-    // Return true if image matches either tags OR moods (if both are specified)
-    // If only one filter is specified, only check that one
-    if (bookTags && bookTags.length > 0 && bookMoods && bookMoods.length > 0) {
-      return matchesTags || matchesMoods;
-    } else if (bookTags && bookTags.length > 0) {
-      return matchesTags;
-    } else if (bookMoods && bookMoods.length > 0) {
-      return matchesMoods;
-    }
-
-    return true;
-  };
-
   const loadImages = useCallback(async () => {
     try {
       setLoading(true);
@@ -87,13 +41,10 @@ export function ImageSelector({ themes, onSelect, onGenerateSuggestions, onClose
         offset
       });
 
-      // Apply book tags/moods filter
-      const filteredImages = result.images.filter(filterImagesByBookCriteria);
-
       if (offset === 0) {
-        setImages(filteredImages);
+        setImages(result.images);
       } else {
-        setImages(prev => [...prev, ...filteredImages]);
+        setImages(prev => [...prev, ...result.images]);
       }
       setTotal(result.total);
     } catch (error) {
@@ -101,7 +52,7 @@ export function ImageSelector({ themes, onSelect, onGenerateSuggestions, onClose
     } finally {
       setLoading(false);
     }
-  }, [selectedThemeId, searchQuery, selectedTag, selectedMood, offset, bookTags, bookMoods]);
+  }, [selectedThemeId, searchQuery, selectedTag, selectedMood, offset]);
 
   // Load tags and moods
   useEffect(() => {
@@ -197,13 +148,15 @@ export function ImageSelector({ themes, onSelect, onGenerateSuggestions, onClose
               {((bookTags && bookTags.length > 0) || (bookMoods && bookMoods.length > 0)) && (
                 <div className="flex flex-wrap gap-2 mt-2">
                   {bookTags && bookTags.length > 0 && (
-                    <div className="text-xs text-blue-400 bg-blue-500/10 px-2 py-1 rounded-full">
-                      Filtré par tags: {bookTags.join(', ')}
+                    <div className="text-xs text-blue-400 bg-blue-500/10 px-2 py-1 rounded-full flex items-center gap-1">
+                      <Tag className="w-3 h-3" />
+                      Tags du book: {bookTags.join(', ')}
                     </div>
                   )}
                   {bookMoods && bookMoods.length > 0 && (
-                    <div className="text-xs text-purple-400 bg-purple-500/10 px-2 py-1 rounded-full">
-                      Filtré par humeur: {bookMoods.join(', ')}
+                    <div className="text-xs text-purple-400 bg-purple-500/10 px-2 py-1 rounded-full flex items-center gap-1">
+                      <Smile className="w-3 h-3" />
+                      Humeurs du book: {bookMoods.join(', ')}
                     </div>
                   )}
                 </div>
