@@ -59,6 +59,15 @@ export const imagesApi = {
 
   enrich: (id: string) => api.post<Image>(`/images/${id}/enrich`).then(res => res.data),
 
+  getUnenriched: () => api.get<{ images: Image[]; count: number }>('/images/unenriched').then(res => res.data),
+
+  batchEnrich: (imageIds: string[]) => api.post<{
+    total: number;
+    successful: number;
+    failed: number;
+    errors: Array<{ id: string; error: string }>;
+  }>('/images/batch-enrich', { image_ids: imageIds }).then(res => res.data),
+
   update: (id: string, data: Partial<Image>) =>
     api.put<Image>(`/images/${id}`, data).then(res => res.data),
 

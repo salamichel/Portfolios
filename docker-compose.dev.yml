@@ -8,6 +8,7 @@ services:
       - NODE_ENV=development
       - PORT=3001
       - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - GEMINI_BOOK_API_KEY=${GEMINI_BOOK_API_KEY}
     volumes:
       - ./server/src:/app/src
       - ./data:/app/data

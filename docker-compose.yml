@@ -9,6 +9,7 @@ services:
       - NODE_ENV=production
       - PORT=3001
       - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - GEMINI_BOOK_API_KEY=${GEMINI_BOOK_API_KEY}
     volumes:
       - ./data:/app/data
       - ./uploads:/app/uploads
@@ -27,7 +28,7 @@ services:
     container_name: portfolio-client
     restart: unless-stopped
     ports:
-      - "80:80"
+      - "8250:80"
     depends_on:
       server:
         condition: service_healthy

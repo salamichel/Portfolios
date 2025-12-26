@@ -1,7 +1,8 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import type { Image, PageTemplate, TemplateLayout, PageData } from '../database.js';
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
+// Use dedicated book API key, fallback to general Gemini key for backward compatibility
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_BOOK_API_KEY || process.env.GEMINI_API_KEY || '');
 
 export interface TextZoneInfo {
   slot_id: string;
