@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { X, BookOpen, Loader2, Sparkles } from 'lucide-react';
-import { booksApi } from '../../api/client';
+import { booksApi, getThumbnailUrl } from '../../api/client';
 import type { Image } from '../../types';
 
 interface CreateBookFromPhotosModalProps {
@@ -172,7 +172,7 @@ export function CreateBookFromPhotosModal({ images, onClose }: CreateBookFromPho
                   className="aspect-square rounded overflow-hidden bg-gray-700 relative"
                 >
                   <img
-                    src={`/api/images/${image.filename}/thumbnail`}
+                    src={getThumbnailUrl(image.filename)}
                     alt={image.title || image.original_name}
                     className="w-full h-full object-cover"
                   />
