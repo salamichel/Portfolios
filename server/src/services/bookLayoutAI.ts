@@ -1,5 +1,5 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import type { Image, PageTemplate, TemplateLayout, PageData } from '../database.js';
+import type { Image, PageTemplate, TemplateLayout, PageData, LayoutSlot } from '../database.js';
 
 // Use dedicated book API key, fallback to general Gemini key for backward compatibility
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_BOOK_API_KEY || process.env.GEMINI_API_KEY || '');
@@ -692,4 +692,93 @@ function getHeuristicSuggestions(
     total_pages: suggestions.length,
     reasoning: 'Disposition basée sur l\'analyse des caractéristiques des images (orientation, ambiance, tags). Les zones de texte sont pré-remplies avec les métadonnées de vos images.'
   };
+}
+
+/**
+ * Generate template metadata (name and description) based on layout analysis
+ */
+export async function generateTemplateMetadata(layout: TemplateLayout): Promise<{ name: string; description: string; category?: string }> {
+  const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+
+  const slots = layout.slots;
+  const totalSlots = slots.length;
+  const imageSlots = slots.filter((s: LayoutSlot) => s.type === 'image').length;
+  const textSlots = slots.filter((s: LayoutSlot) => s.type === 'text').length;
+  const leftPageSlots = slots.filter((s: LayoutSlot) => s.page === 'left').length;
+  const rightPageSlots = slots.filter((s: LayoutSlot) => s.page === 'right').length;
+  const spanningSlots = slots.filter((s: LayoutSlot) => s.width > 100).length;
+
+  const layoutDescription = slots.map((slot: LayoutSlot) => {
+    const spanning = slot.width > 100 ? ' (spanning both pages)' : '';
+    return `- ${slot.type} slot on ${slot.page} page at (${slot.x}%, ${slot.y}%) with size ${slot.width}x${slot.height}%${spanning}`;
+  }).join('\n');
+
+  const totalSlotsStr = String(totalSlots);
+  const imageSlotsStr = String(imageSlots);
+  const textSlotsStr = String(textSlots);
+  const leftPageSlotsStr = String(leftPageSlots);
+  const rightPageSlotsStr = String(rightPageSlots);
+  const spanningSlotsStr = String(spanningSlots);
+
+  const prompt = `Analyze this book template layout and generate a concise French name, description, and category.
+
+Layout analysis:
+- Total slots: ${totalSlotsStr}
+- Image slots: ${imageSlotsStr}
+- Text slots: ${textSlotsStr}
+- Left page slots: ${leftPageSlotsStr}
+- Right page slots: ${rightPageSlotsStr}
+- Spanning slots (panoramic): ${spanningSlotsStr}
+
+Slot details:
+${layoutDescription}
+
+Generate:
+1. A short, descriptive French name (3-5 words max) that captures the layout style
+2. A brief French description (1-2 sentences) explaining what this template is good for
+3. The most appropriate category from: cover, chapter, standard, gallery, highlight, narrative
+   - cover: For book covers and opening pages
+   - chapter: For chapter introductions and section dividers
+   - standard: For general multipurpose layouts
+   - gallery: For displaying multiple images (grids, mosaics)
+   - highlight: For emphasizing single images (panoramic, centered)
+   - narrative: For combining images with text content
+
+Respond ONLY with valid JSON in this format:
+{
+  "name": "Template name in French",
+  "description": "Template description in French",
+  "category": "one of: cover, chapter, standard, gallery, highlight, narrative"
+}`;
+
+  try {
+    const result = await model.generateContent(prompt);
+    const text = result.response.text().trim();
+
+    let jsonText = text;
+    if (text.includes('```json')) {
+      jsonText = text.split('```json')[1].split('```')[0].trim();
+    } else if (text.includes('```')) {
+      jsonText = text.split('```')[1].split('```')[0].trim();
+    }
+
+    const parsed = JSON.parse(jsonText);
+    return {
+      name: parsed.name || 'Nouveau template',
+      description: parsed.description || 'Template personnalisé',
+      category: parsed.category || 'standard'
+    };
+  } catch (error) {
+    console.error('Failed to generate template metadata:', error);
+    const parts: string[] = [];
+    if (spanningSlots > 0) parts.push('Panoramique');
+    if (imageSlots > 0) parts.push(`${imageSlots} image${imageSlots > 1 ? 's' : ''}`);
+    if (textSlots > 0) parts.push(`${textSlots} texte${textSlots > 1 ? 's' : ''}`);
+
+    return {
+      name: parts.join(' + ') || 'Template personnalisé',
+      description: `Template avec ${totalSlots} zone${totalSlots > 1 ? 's' : ''} sur double page`,
+      category: 'standard'
+    };
+  }
 }

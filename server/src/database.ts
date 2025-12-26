@@ -115,6 +115,13 @@ try {
   // Column already exists, ignore error
 }
 
+// Migration: Add category column to page_templates if it doesn't exist
+try {
+  db.exec(`ALTER TABLE page_templates ADD COLUMN category TEXT DEFAULT 'standard'`);
+} catch {
+  // Column already exists, ignore error
+}
+
 export interface Theme {
   id: string;
   name: string;
@@ -159,11 +166,14 @@ export interface TemplateLayout {
   slots: LayoutSlot[];
 }
 
+export type TemplateCategory = 'cover' | 'chapter' | 'standard' | 'gallery' | 'highlight' | 'narrative';
+
 export interface PageTemplate {
   id: string;
   name: string;
   description: string | null;
   layout: TemplateLayout;
+  category: TemplateCategory;
   is_predefined: boolean;
   created_at: string;
   updated_at: string;
@@ -534,13 +544,14 @@ export const templateDb = {
 
   create(template: Omit<PageTemplate, 'created_at' | 'updated_at'>): PageTemplate {
     db.prepare(`
-      INSERT INTO page_templates (id, name, description, layout, is_predefined)
-      VALUES (?, ?, ?, ?, ?)
+      INSERT INTO page_templates (id, name, description, layout, category, is_predefined)
+      VALUES (?, ?, ?, ?, ?, ?)
     `).run(
       template.id,
       template.name,
       template.description,
       JSON.stringify(template.layout),
+      template.category || 'standard',
       template.is_predefined ? 1 : 0
     );
     return this.getById(template.id)!;
@@ -553,6 +564,7 @@ export const templateDb = {
     if (data.name !== undefined) { fields.push('name = ?'); values.push(data.name); }
     if (data.description !== undefined) { fields.push('description = ?'); values.push(data.description); }
     if (data.layout !== undefined) { fields.push('layout = ?'); values.push(JSON.stringify(data.layout)); }
+    if (data.category !== undefined) { fields.push('category = ?'); values.push(data.category); }
 
     if (fields.length === 0) return this.getById(id);
 
@@ -583,6 +595,7 @@ export const templateDb = {
         id: 'tpl-full-bleed-2',
         name: 'Pleine page x2',
         description: 'Une image pleine page de chaque côté',
+        category: 'standard',
         is_predefined: true,
         layout: {
           slots: [
@@ -595,6 +608,7 @@ export const templateDb = {
         id: 'tpl-single-left',
         name: 'Image gauche seule',
         description: 'Une seule grande image à gauche, page droite vide',
+        category: 'highlight',
         is_predefined: true,
         layout: {
           slots: [
@@ -606,6 +620,7 @@ export const templateDb = {
         id: 'tpl-single-right',
         name: 'Image droite seule',
         description: 'Page gauche vide, une seule grande image à droite',
+        category: 'highlight',
         is_predefined: true,
         layout: {
           slots: [
@@ -617,6 +632,7 @@ export const templateDb = {
         id: 'tpl-grid-2x2',
         name: 'Grille 2x2',
         description: 'Quatre images réparties sur les deux pages en pleine page',
+        category: 'gallery',
         is_predefined: true,
         layout: {
           slots: [
@@ -631,6 +647,7 @@ export const templateDb = {
         id: 'tpl-1-large-2-small',
         name: '1 grande + 2 petites',
         description: 'Une grande image à gauche, deux petites empilées à droite',
+        category: 'standard',
         is_predefined: true,
         layout: {
           slots: [
@@ -644,6 +661,7 @@ export const templateDb = {
         id: 'tpl-2-small-1-large',
         name: '2 petites + 1 grande',
         description: 'Deux petites images empilées à gauche, une grande à droite',
+        category: 'standard',
         is_predefined: true,
         layout: {
           slots: [
@@ -657,6 +675,7 @@ export const templateDb = {
         id: 'tpl-panoramic',
         name: 'Panoramique',
         description: 'Une image qui s\'étend sur les deux pages',
+        category: 'highlight',
         is_predefined: true,
         layout: {
           slots: [
@@ -668,6 +687,7 @@ export const templateDb = {
         id: 'tpl-grid-3',
         name: 'Triptyque',
         description: 'Trois images en bande horizontale',
+        category: 'gallery',
         is_predefined: true,
         layout: {
           slots: [
@@ -681,6 +701,7 @@ export const templateDb = {
         id: 'tpl-mosaic-5',
         name: 'Mosaïque 5 images',
         description: 'Cinq images en disposition mosaïque',
+        category: 'gallery',
         is_predefined: true,
         layout: {
           slots: [
@@ -696,6 +717,7 @@ export const templateDb = {
         id: 'tpl-centered-single',
         name: 'Centré unique',
         description: 'Une seule image centrée sur la double page',
+        category: 'highlight',
         is_predefined: true,
         layout: {
           slots: [
@@ -708,6 +730,7 @@ export const templateDb = {
         id: 'tpl-image-text-right',
         name: 'Image + Texte droite',
         description: 'Une image à gauche avec une zone de texte à droite',
+        category: 'narrative',
         is_predefined: true,
         layout: {
           slots: [
@@ -720,6 +743,7 @@ export const templateDb = {
         id: 'tpl-text-image-left',
         name: 'Texte + Image gauche',
         description: 'Une zone de texte à gauche avec une image à droite',
+        category: 'narrative',
         is_predefined: true,
         layout: {
           slots: [
@@ -732,6 +756,7 @@ export const templateDb = {
         id: 'tpl-images-caption',
         name: 'Images + Légende',
         description: 'Deux images avec une zone de légende en bas',
+        category: 'narrative',
         is_predefined: true,
         layout: {
           slots: [
@@ -745,6 +770,7 @@ export const templateDb = {
         id: 'tpl-title-image',
         name: 'Titre + Image',
         description: 'Une zone de titre en haut avec une grande image',
+        category: 'chapter',
         is_predefined: true,
         layout: {
           slots: [
@@ -757,6 +783,7 @@ export const templateDb = {
         id: 'tpl-chapter-intro',
         name: 'Introduction chapitre',
         description: 'Page de titre de chapitre avec texte d\'introduction',
+        category: 'chapter',
         is_predefined: true,
         layout: {
           slots: [
@@ -769,6 +796,7 @@ export const templateDb = {
         id: 'tpl-gallery-text',
         name: 'Galerie + Texte',
         description: 'Trois images à gauche avec texte descriptif à droite',
+        category: 'narrative',
         is_predefined: true,
         layout: {
           slots: [

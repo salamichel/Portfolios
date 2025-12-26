@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { templateDb } from '../database.js';
+import { generateTemplateMetadata } from '../services/bookLayoutAI.js';
 
 const router = Router();
 
@@ -30,7 +31,7 @@ router.get('/:id', (req, res) => {
 // Create custom template
 router.post('/', (req, res) => {
   try {
-    const { name, description, layout } = req.body;
+    const { name, description, layout, category } = req.body;
 
     if (!name || typeof name !== 'string' || name.trim().length === 0) {
       return res.status(400).json({ error: 'Template name is required' });
@@ -45,6 +46,7 @@ router.post('/', (req, res) => {
       name: name.trim(),
       description: description?.trim() || null,
       layout,
+      category: category || 'standard',
       is_predefined: false
     });
 
@@ -66,16 +68,34 @@ router.put('/:id', (req, res) => {
       return res.status(403).json({ error: 'Cannot modify predefined templates' });
     }
 
-    const { name, description, layout } = req.body;
+    const { name, description, layout, category } = req.body;
     const template = templateDb.update(req.params.id, {
       name: name?.trim(),
       description: description?.trim(),
-      layout
+      layout,
+      category
     });
 
     res.json(template);
   } catch (error) {
     res.status(500).json({ error: 'Failed to update template' });
+  }
+});
+
+// Generate template metadata with AI
+router.post('/generate-metadata', async (req, res) => {
+  try {
+    const { layout } = req.body;
+
+    if (!layout || !Array.isArray(layout.slots)) {
+      return res.status(400).json({ error: 'Valid layout with slots is required' });
+    }
+
+    const metadata = await generateTemplateMetadata(layout);
+    res.json(metadata);
+  } catch (error) {
+    console.error('Error generating template metadata:', error);
+    res.status(500).json({ error: 'Failed to generate template metadata' });
   }
 });
 
