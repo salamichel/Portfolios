@@ -143,8 +143,11 @@ Portfolios/
 | Variable | Description | Défaut |
 |----------|-------------|--------|
 | `GEMINI_API_KEY` | Clé API Google Gemini (requis) | - |
+| `GEMINI_BOOK_API_KEY` | Clé API Gemini dédiée pour le book (optionnel, fallback sur GEMINI_API_KEY) | - |
 | `PORT` | Port du serveur API | 3001 |
 | `NODE_ENV` | Environnement (development/production) | development |
+| `AI_REQUEST_TIMEOUT_MS` | Timeout pour les requêtes IA en millisecondes | 45000 |
+| `AI_MAX_RETRIES` | Nombre maximum de tentatives en cas d'échec réseau | 3 |
 
 ## 📝 License
 
