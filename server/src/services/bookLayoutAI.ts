@@ -131,6 +131,67 @@ function getTextZonesForTemplate(template: PageTemplate): TextZoneInfo[] {
   }));
 }
 
+// Helper function to add rich text formatting to content
+function enrichTextWithFormatting(
+  content: string,
+  slotType: string,
+  context: { isFirstPage?: boolean; isChapterStart?: boolean; mood?: string }
+): string {
+  if (!content) return content;
+
+  const { isFirstPage, isChapterStart, mood } = context;
+  const slotId = slotType.toLowerCase();
+
+  // Title or chapter slots get heading formatting
+  if (slotId.includes('title') || slotId.includes('chapter')) {
+    if (isFirstPage) {
+      // Main book title: large heading with bold
+      return `# **${content}**`;
+    } else if (isChapterStart) {
+      // Chapter title: medium heading with mood subtitle
+      const moodText = mood && mood !== 'unknown' ? `\n*${mood.charAt(0).toUpperCase() + mood.slice(1)}*` : '';
+      return `## **${content}**${moodText}`;
+    } else {
+      // Regular title: bold
+      return `**${content}**`;
+    }
+  }
+
+  // Caption or legend: emphasize first part
+  if (slotId.includes('caption') || slotId.includes('legend')) {
+    // Split by separator and make alternating parts bold
+    const parts = content.split(' • ');
+    if (parts.length > 1) {
+      return parts.map((part, idx) => idx % 2 === 0 ? `**${part}**` : `*${part}*`).join(' • ');
+    }
+    return `*${content}*`;
+  }
+
+  // Description: add emphasis to first sentence
+  if (slotId.includes('description') || slotId.includes('desc')) {
+    const sentences = content.split(/\n\n|\. /);
+    if (sentences.length > 1) {
+      const first = sentences[0].trim();
+      const rest = sentences.slice(1).join('. ').trim();
+      return `**${first}.**\n\n*${rest}*`;
+    }
+    return `*${content}*`;
+  }
+
+  // Generic text zones: smart emphasis on key words
+  if (slotId.includes('text')) {
+    // If it's a comma-separated list (tags), make some bold
+    if (content.includes(',')) {
+      const items = content.split(',').map(s => s.trim());
+      return items.map((item, idx) => idx < 2 ? `**${item}**` : item).join(', ');
+    }
+    // Otherwise add italic emphasis
+    return `*${content}*`;
+  }
+
+  return content;
+}
+
 // Generate suggested content for text zones based on images metadata
 function generateTextContent(
   template: PageTemplate,
@@ -198,6 +259,11 @@ function generateTextContent(
           suggested_content = uniqueTags.join(', ');
         }
       }
+    }
+
+    // Apply rich text formatting
+    if (suggested_content) {
+      suggested_content = enrichTextWithFormatting(suggested_content, desc.slot_id, context);
     }
 
     return {
@@ -302,6 +368,17 @@ function selectBestTemplate(
         if (template.id === 'tpl-image-text-right' || template.id === 'tpl-text-image-left') {
           score += 15;
         }
+        // Zig-zag templates are excellent for rich narrative with metadata
+        if (template.id === 'tpl-zigzag-3-rows' || template.id === 'tpl-zigzag-3-reverse') {
+          score += 25; // High score for narrative storytelling
+          // Additional bonus if we have exactly 3 images with metadata
+          if (count >= 3) {
+            const richImages = images.slice(0, 3).filter(img => img.has_metadata).length;
+            if (richImages >= 2) {
+              score += 10; // Extra bonus for well-documented images
+            }
+          }
+        }
       }
     }
 
@@ -389,8 +466,19 @@ Crée une disposition cohérente et artistique en suivant ces principes :
    - Propose un template avec titre (tpl-title-image) pour la première page
    - Propose des templates avec légendes (tpl-images-caption, tpl-gallery-text) pour les images ayant des métadonnées
    - Propose des templates image+texte (tpl-image-text-right, tpl-text-image-left) pour créer du rythme
+   - Propose des templates zig-zag (tpl-zigzag-3-rows, tpl-zigzag-3-reverse) pour une narration dynamique
    - Propose un template chapitre (tpl-chapter-intro) lors des changements d'ambiance
 7. Pour chaque zone de texte, génère un contenu approprié basé sur les métadonnées des images (title, description, tags, mood)
+8. MISE EN FORME DU TEXTE : Utilise les balises Markdown pour enrichir le texte :
+   - **texte** pour mettre en gras (emphase forte)
+   - *texte* pour mettre en italique (emphase légère, citations)
+   - # Titre pour un grand titre (xlarge)
+   - ## Sous-titre pour un titre moyen (large)
+   - Varie les tailles et les emphases pour créer une hiérarchie visuelle
+   - Exemples :
+     * "# **Voyage en Islande**\n*Une aventure au cœur des glaciers*"
+     * "**Lumière du soir** sur les *fjords norvégiens*"
+     * "## Chapitre 2\nLes montagnes nous **appellent** avec leur *silence majestueux*"
 
 NOTE: Le nombre d'images par template correspond à "image_slot_count", pas au nombre total de slots.
 
@@ -402,14 +490,14 @@ Réponds en JSON avec ce format exact :
       "image_ids": ["id1", "id2"],
       "reasoning": "courte explication du choix",
       "text_content": {
-        "slot_id": "contenu suggéré pour cette zone de texte"
+        "slot_id": "contenu suggéré avec balises Markdown pour le formatage"
       }
     }
   ],
   "overall_reasoning": "explication de la logique globale"
 }
 
-IMPORTANT: Pour "text_content", utilise les slot_id des zones de texte du template choisi comme clés, et génère un texte court et évocateur comme valeur. Inspire-toi des titres, descriptions et ambiances des images.`;
+IMPORTANT: Pour "text_content", utilise les slot_id des zones de texte du template choisi comme clés, et génère un texte court et évocateur avec formatage Markdown comme valeur. Inspire-toi des titres, descriptions et ambiances des images.`;
 
   const result = await model.generateContent(prompt);
   const response = await result.response;
