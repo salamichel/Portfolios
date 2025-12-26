@@ -98,7 +98,7 @@ export const templatesApi = {
 
   getById: (id: string) => api.get<PageTemplate>(`/templates/${id}`).then(res => res.data),
 
-  create: (data: { name: string; description?: string; layout: { slots: any[] } }) =>
+  create: (data: { name: string; description?: string; layout: { slots: any[] }; category?: string }) =>
     api.post<PageTemplate>('/templates', data).then(res => res.data),
 
   update: (id: string, data: Partial<PageTemplate>) =>
@@ -107,7 +107,7 @@ export const templatesApi = {
   delete: (id: string) => api.delete(`/templates/${id}`),
 
   generateMetadata: (layout: { slots: any[] }) =>
-    api.post<{ name: string; description: string }>('/templates/generate-metadata', { layout }).then(res => res.data)
+    api.post<{ name: string; description: string; category?: string }>('/templates/generate-metadata', { layout }).then(res => res.data)
 };
 
 // Books API

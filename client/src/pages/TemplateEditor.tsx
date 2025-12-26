@@ -149,7 +149,7 @@ export function TemplateEditor() {
     }
   };
 
-  const handleSaveMetadata = async (name: string, description: string, category: string) => {
+  const handleSaveMetadata = async (name: string, description: string, category: TemplateCategory) => {
     if (!selectedTemplate || selectedTemplate.is_predefined) return;
 
     try {
