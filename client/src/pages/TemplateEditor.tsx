@@ -175,9 +175,9 @@ export function TemplateEditor() {
   const selectedSlot = editedLayout?.slots.find(s => s.id === selectedSlotId) || null;
 
   return (
-    <div className="min-h-screen bg-gray-900 flex flex-col">
+    <div className="h-screen bg-gray-900 flex flex-col overflow-hidden">
       {/* Header */}
-      <header className="bg-gray-900/80 backdrop-blur-lg border-b border-gray-800 sticky top-0 z-40">
+      <header className="bg-gray-900/80 backdrop-blur-lg border-b border-gray-800 flex-shrink-0">
         <div className="px-4 py-4 flex items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             <Link
