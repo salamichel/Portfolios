@@ -813,6 +813,7 @@ export const templateDb = {
         name: 'Zig Zag 3 lignes',
         description: 'Trois lignes alternées : image gauche/texte droite, texte gauche/image droite, image gauche/texte droite',
         is_predefined: true,
+        category: 'narrative',
         layout: {
           slots: [
             // Ligne 1: image gauche, texte droite
@@ -832,6 +833,7 @@ export const templateDb = {
         name: 'Zig Zag 3 lignes inversé',
         description: 'Trois lignes alternées : texte gauche/image droite, image gauche/texte droite, texte gauche/image droite',
         is_predefined: true,
+        category: 'narrative',
         layout: {
           slots: [
             // Ligne 1: texte gauche, image droite
