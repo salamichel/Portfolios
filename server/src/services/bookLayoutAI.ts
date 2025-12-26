@@ -1,5 +1,5 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import type { Image, PageTemplate, TemplateLayout, PageData, LayoutSlot } from '../database.js';
+import type { Image, PageTemplate, TemplateLayout, PageData, LayoutSlot, SlotAnnotation } from '../database.js';
 
 // Use dedicated book API key, fallback to general Gemini key for backward compatibility
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_BOOK_API_KEY || process.env.GEMINI_API_KEY || '');
@@ -190,6 +190,24 @@ function enrichTextWithFormatting(
   }
 
   return content;
+}
+
+// Helper function to create automatic annotation for images with enriched metadata
+function createAutoAnnotation(image: Image): SlotAnnotation | undefined {
+  // Only create annotation if image has AI-enriched metadata or title
+  if (!image.ai_enriched && !image.title) {
+    return undefined;
+  }
+
+  return {
+    title: image.title || undefined,
+    description: image.description || undefined,
+    show_title: Boolean(image.title),
+    show_description: false, // Keep description hidden by default
+    show_paragraph: false,
+    position: 'bottom',
+    use_image_metadata: true
+  };
 }
 
 // Generate suggested content for text zones based on images metadata
@@ -528,11 +546,22 @@ IMPORTANT: Pour "text_content", utilise les slot_id des zones de texte du templa
       .map((id: string) => images.find((img: Image) => img.id === id))
       .filter((img: Image | undefined): img is Image => img !== undefined);
 
+    // Determine context for formatting
+    const isFirstPage = position === 0;
+    const isChapterStart = position > 0 && suggestion.reasoning?.toLowerCase().includes('chapitre');
+    const mood = assignedImages[0]?.mood || undefined;
+    const context = { isFirstPage, isChapterStart, mood };
+
     // Build text zones with suggested content from AI or fallback
     const textZones: TextZoneInfo[] = textSlots.map(slot => {
-      const aiContent = suggestion.text_content?.[slot.id];
+      let aiContent = suggestion.text_content?.[slot.id];
       const analysis = analyzeTemplate(template);
       const slotDesc = analysis.textSlotDescriptions.find(d => d.slot_id === slot.id);
+
+      // Apply rich text formatting to AI-generated content
+      if (aiContent) {
+        aiContent = enrichTextWithFormatting(aiContent, slot.id, context);
+      }
 
       return {
         slot_id: slot.id,
@@ -558,10 +587,16 @@ IMPORTANT: Pour "text_content", utilise les slot_id des zones de texte du templa
     }
 
     const pageData: PageData = {
-      slots: suggestion.image_ids.map((imageId: string, slotIndex: number) => ({
-        slot_id: imageSlots[slotIndex]?.id || `slot-${slotIndex}`,
-        image_id: imageId
-      })),
+      slots: suggestion.image_ids.map((imageId: string, slotIndex: number) => {
+        const image = assignedImages.find((img: Image) => img.id === imageId);
+        const annotation = image ? createAutoAnnotation(image) : undefined;
+
+        return {
+          slot_id: imageSlots[slotIndex]?.id || `slot-${slotIndex}`,
+          image_id: imageId,
+          annotation
+        };
+      }),
       // Pre-fill text slots with suggested content
       textSlots: textZones
         .filter(tz => tz.suggested_content)
@@ -645,10 +680,16 @@ function getHeuristicSuggestions(
       const imageSlots = template.layout.slots.filter(s => s.type === 'image');
 
       const pageData: PageData = {
-        slots: assignedAnalyses.map((analysis, idx) => ({
-          slot_id: imageSlots[idx]?.id || `slot-${idx}`,
-          image_id: analysis.id
-        })),
+        slots: assignedAnalyses.map((analysis, idx) => {
+          const image = assignedFullImages.find(img => img.id === analysis.id);
+          const annotation = image ? createAutoAnnotation(image) : undefined;
+
+          return {
+            slot_id: imageSlots[idx]?.id || `slot-${idx}`,
+            image_id: analysis.id,
+            annotation
+          };
+        }),
         // Pre-fill text slots with generated content
         textSlots: textZonesWithContent
           .filter(tz => tz.suggested_content)
