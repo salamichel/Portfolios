@@ -131,6 +131,67 @@ function getTextZonesForTemplate(template: PageTemplate): TextZoneInfo[] {
   }));
 }
 
+// Helper function to add rich text formatting to content
+function enrichTextWithFormatting(
+  content: string,
+  slotType: string,
+  context: { isFirstPage?: boolean; isChapterStart?: boolean; mood?: string }
+): string {
+  if (!content) return content;
+
+  const { isFirstPage, isChapterStart, mood } = context;
+  const slotId = slotType.toLowerCase();
+
+  // Title or chapter slots get heading formatting
+  if (slotId.includes('title') || slotId.includes('chapter')) {
+    if (isFirstPage) {
+      // Main book title: large heading with bold
+      return `# **${content}**`;
+    } else if (isChapterStart) {
+      // Chapter title: medium heading with mood subtitle
+      const moodText = mood && mood !== 'unknown' ? `\n*${mood.charAt(0).toUpperCase() + mood.slice(1)}*` : '';
+      return `## **${content}**${moodText}`;
+    } else {
+      // Regular title: bold
+      return `**${content}**`;
+    }
+  }
+
+  // Caption or legend: emphasize first part
+  if (slotId.includes('caption') || slotId.includes('legend')) {
+    // Split by separator and make alternating parts bold
+    const parts = content.split(' • ');
+    if (parts.length > 1) {
+      return parts.map((part, idx) => idx % 2 === 0 ? `**${part}**` : `*${part}*`).join(' • ');
+    }
+    return `*${content}*`;
+  }
+
+  // Description: add emphasis to first sentence
+  if (slotId.includes('description') || slotId.includes('desc')) {
+    const sentences = content.split(/\n\n|\. /);
+    if (sentences.length > 1) {
+      const first = sentences[0].trim();
+      const rest = sentences.slice(1).join('. ').trim();
+      return `**${first}.**\n\n*${rest}*`;
+    }
+    return `*${content}*`;
+  }
+
+  // Generic text zones: smart emphasis on key words
+  if (slotId.includes('text')) {
+    // If it's a comma-separated list (tags), make some bold
+    if (content.includes(',')) {
+      const items = content.split(',').map(s => s.trim());
+      return items.map((item, idx) => idx < 2 ? `**${item}**` : item).join(', ');
+    }
+    // Otherwise add italic emphasis
+    return `*${content}*`;
+  }
+
+  return content;
+}
+
 // Generate suggested content for text zones based on images metadata
 function generateTextContent(
   template: PageTemplate,
@@ -198,6 +259,11 @@ function generateTextContent(
           suggested_content = uniqueTags.join(', ');
         }
       }
+    }
+
+    // Apply rich text formatting
+    if (suggested_content) {
+      suggested_content = enrichTextWithFormatting(suggested_content, desc.slot_id, context);
     }
 
     return {
