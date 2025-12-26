@@ -109,7 +109,7 @@ export function TemplateCanvas({ layout, onLayoutChange, isEditable, selectedSlo
     }
   }, [isDragging, selectedSlotId, dragStart]);
 
-  const handleResizeStart = (slotId: string, corner: string, e: React.MouseEvent) => {
+  const handleResizeStart = (slotId: string, _corner: string, e: React.MouseEvent) => {
     if (!isEditable) return;
     e.stopPropagation();
     setIsResizing(true);
