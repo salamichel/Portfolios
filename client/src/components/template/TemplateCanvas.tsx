@@ -76,8 +76,9 @@ export function TemplateCanvas({ layout, onLayoutChange, isEditable, selectedSlo
     if (!isDragging || !selectedSlotId || !dragStart || !canvasRef.current) return;
 
     const canvasRect = canvasRef.current.getBoundingClientRect();
-    // Calculate delta from initial position (not incremental)
-    const deltaX = ((e.clientX - dragStart.x) / canvasRect.width) * 100;
+    // Calculate delta from initial position
+    // Multiply by 200 because each page is 0-100% but occupies 50% of canvas width
+    const deltaX = ((e.clientX - dragStart.x) / canvasRect.width) * 200;
     const deltaY = ((e.clientY - dragStart.y) / canvasRect.height) * 100;
 
     const updatedSlots = layout.slots.map(slot => {
@@ -142,7 +143,8 @@ export function TemplateCanvas({ layout, onLayoutChange, isEditable, selectedSlo
     if (dragStart.initialWidth === undefined || dragStart.initialHeight === undefined) return;
 
     const canvasRect = canvasRef.current.getBoundingClientRect();
-    const deltaX = ((e.clientX - dragStart.x) / canvasRect.width) * 100;
+    // Multiply by 200 for width because each page is 0-100% but occupies 50% of canvas
+    const deltaX = ((e.clientX - dragStart.x) / canvasRect.width) * 200;
     const deltaY = ((e.clientY - dragStart.y) / canvasRect.height) * 100;
 
     const updatedSlots = layout.slots.map(slot => {
@@ -191,8 +193,26 @@ export function TemplateCanvas({ layout, onLayoutChange, isEditable, selectedSlo
     const isBeingDragged = isDragging && isSelected;
     const isBeingResized = isResizing && isSelected;
 
-    // Calculate position
-    const left = slot.page === 'left' ? slot.x : slot.x + 100;
+    // Calculate position for double-page canvas
+    // Each page is 0-100%, but in the canvas each page takes 50% of the width
+    // For slots that span both pages (width > 100), they start from the left page
+    const isSpanning = slot.width > 100;
+
+    let left: number, width: number;
+
+    if (isSpanning) {
+      // Spanning slot: starts from x position on left page, width spans across
+      left = slot.x / 2;
+      width = slot.width / 2;
+    } else if (slot.page === 'left') {
+      // Left page: 0-50% of canvas
+      left = slot.x / 2;
+      width = slot.width / 2;
+    } else {
+      // Right page: 50-100% of canvas
+      left = 50 + slot.x / 2;
+      width = slot.width / 2;
+    }
 
     return (
       <div
@@ -207,7 +227,7 @@ export function TemplateCanvas({ layout, onLayoutChange, isEditable, selectedSlo
         style={{
           left: `${left}%`,
           top: `${slot.y}%`,
-          width: `${slot.width}%`,
+          width: `${width}%`,
           height: `${slot.height}%`,
         }}
         onClick={(e) => handleSlotClick(slot.id, e)}
