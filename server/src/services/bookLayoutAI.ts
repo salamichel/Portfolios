@@ -8,6 +8,66 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_BOOK_API_KEY || process.
 const AI_REQUEST_TIMEOUT_MS = parseInt(process.env.AI_REQUEST_TIMEOUT_MS || '45000', 10); // 45 seconds default
 const AI_MAX_RETRIES = parseInt(process.env.AI_MAX_RETRIES || '3', 10); // 3 retries default
 const AI_RETRY_BASE_DELAY_MS = 2000; // Start with 2 seconds
+const AI_CACHE_TTL_MS = parseInt(process.env.AI_CACHE_TTL_MS || '900000', 10); // 15 minutes default
+
+// Simple in-memory cache for AI suggestions
+interface CacheEntry {
+  suggestions: BookLayoutSuggestions;
+  timestamp: number;
+}
+
+const suggestionsCache = new Map<string, CacheEntry>();
+
+/**
+ * Generate cache key from image IDs
+ */
+function generateCacheKey(imageIds: string[]): string {
+  // Sort IDs to ensure same images in different order produce same key
+  return imageIds.slice().sort().join('|');
+}
+
+/**
+ * Get cached suggestions if available and not expired
+ */
+function getCachedSuggestions(imageIds: string[]): BookLayoutSuggestions | null {
+  const key = generateCacheKey(imageIds);
+  const entry = suggestionsCache.get(key);
+
+  if (!entry) {
+    return null;
+  }
+
+  // Check if cache entry has expired
+  const now = Date.now();
+  if (now - entry.timestamp > AI_CACHE_TTL_MS) {
+    suggestionsCache.delete(key);
+    return null;
+  }
+
+  console.log(`Cache hit for ${imageIds.length} images (age: ${Math.round((now - entry.timestamp) / 1000)}s)`);
+  return entry.suggestions;
+}
+
+/**
+ * Store suggestions in cache
+ */
+function cacheSuggestions(imageIds: string[], suggestions: BookLayoutSuggestions): void {
+  const key = generateCacheKey(imageIds);
+  suggestionsCache.set(key, {
+    suggestions,
+    timestamp: Date.now()
+  });
+
+  // Cleanup old entries (simple garbage collection)
+  const now = Date.now();
+  for (const [k, entry] of suggestionsCache.entries()) {
+    if (now - entry.timestamp > AI_CACHE_TTL_MS) {
+      suggestionsCache.delete(k);
+    }
+  }
+
+  console.log(`Cached suggestions for ${imageIds.length} images (cache size: ${suggestionsCache.size})`);
+}
 
 export interface TextZoneInfo {
   slot_id: string;
@@ -420,15 +480,35 @@ function selectBestTemplate(
 
 export async function suggestBookLayout(
   images: Image[],
-  templates: PageTemplate[]
+  templates: PageTemplate[],
+  options: { useCache?: boolean; previousPages?: LayoutSuggestion[] } = {}
 ): Promise<BookLayoutSuggestions> {
+  const { useCache = true, previousPages } = options;
+
+  // Check cache first if enabled
+  if (useCache) {
+    const imageIds = images.map(img => img.id);
+    const cached = getCachedSuggestions(imageIds);
+    if (cached) {
+      return cached;
+    }
+  }
+
   // Analyze all images
   const analyses = images.map(analyzeImageProperties);
 
   // Try AI-based suggestions if API key is available
   if (process.env.GEMINI_API_KEY) {
     try {
-      return await getAISuggestions(images, analyses, templates);
+      const suggestions = await getAISuggestions(images, analyses, templates, { previousPages });
+
+      // Cache the results
+      if (useCache) {
+        const imageIds = images.map(img => img.id);
+        cacheSuggestions(imageIds, suggestions);
+      }
+
+      return suggestions;
     } catch (error) {
       console.error('AI suggestion failed, falling back to heuristics:', error);
     }
@@ -618,14 +698,11 @@ function validateAIResponse(
   };
 }
 
-async function getAISuggestions(
-  images: Image[],
-  analyses: ImageAnalysis[],
-  templates: PageTemplate[]
-): Promise<BookLayoutSuggestions> {
-  const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-lite' });
-
-  const imageDescriptions = analyses.map((a, i) => ({
+/**
+ * Prepare image descriptions for AI prompt
+ */
+function prepareImageDescriptions(images: Image[], analyses: ImageAnalysis[]) {
+  return analyses.map((a, i) => ({
     index: i,
     id: a.id,
     orientation: a.orientation,
@@ -636,9 +713,13 @@ async function getAISuggestions(
     description: images[i].description || null,
     has_metadata: a.has_metadata
   }));
+}
 
-  // Analyze templates to include text zone information
-  const templateDescriptions = templates.map(t => {
+/**
+ * Prepare template descriptions for AI prompt
+ */
+function prepareTemplateDescriptions(templates: PageTemplate[]) {
+  return templates.map(t => {
     const analysis = analyzeTemplate(t);
     return {
       id: t.id,
@@ -650,14 +731,34 @@ async function getAISuggestions(
       has_panoramic: t.layout.slots.some(s => s.width > 100)
     };
   });
+}
 
-  const prompt = `Tu es un directeur artistique et rédacteur expert en mise en page de livres photo.
+/**
+ * Build AI prompt for layout suggestions
+ */
+function buildAIPrompt(
+  imageDescriptions: any[],
+  templateDescriptions: any[],
+  options: { previousPages?: LayoutSuggestion[] } = {}
+): string {
+  const { previousPages } = options;
 
-Voici ${images.length} images à disposer dans un book :
+  let contextSection = '';
+  if (previousPages && previousPages.length > 0) {
+    const lastPages = previousPages.slice(-2); // Last 2 pages for context
+    contextSection = `\n\nCONTEXTE DES PAGES PRÉCÉDENTES (pour assurer la cohérence narrative) :
+${lastPages.map((p, idx) => `Page ${previousPages.length - lastPages.length + idx + 1}: Template "${p.template_name}" - ${p.reasoning}`).join('\n')}
+
+Assure une transition fluide et une continuité narrative avec ces pages précédentes.\n`;
+  }
+
+  return `Tu es un directeur artistique et rédacteur expert en mise en page de livres photo.
+
+Voici ${imageDescriptions.length} images à disposer dans un book :
 ${JSON.stringify(imageDescriptions, null, 2)}
 
 Voici les templates de mise en page disponibles :
-${JSON.stringify(templateDescriptions, null, 2)}
+${JSON.stringify(templateDescriptions, null, 2)}${contextSection}
 
 Crée une disposition cohérente et artistique en suivant ces principes :
 1. Grouper les images par ambiance/mood similaire
@@ -679,9 +780,9 @@ Crée une disposition cohérente et artistique en suivant ces principes :
    - ## Sous-titre pour un titre moyen (large)
    - Varie les tailles et les emphases pour créer une hiérarchie visuelle
    - Exemples :
-     * "# **Voyage en Islande**\n*Une aventure au cœur des glaciers*"
+     * "# **Voyage en Islande**\\n*Une aventure au cœur des glaciers*"
      * "**Lumière du soir** sur les *fjords norvégiens*"
-     * "## Chapitre 2\nLes montagnes nous **appellent** avec leur *silence majestueux*"
+     * "## Chapitre 2\\nLes montagnes nous **appellent** avec leur *silence majestueux*"
 
 NOTE: Le nombre d'images par template correspond à "image_slot_count", pas au nombre total de slots.
 
@@ -701,9 +802,15 @@ Réponds en JSON avec ce format exact :
 }
 
 IMPORTANT: Pour "text_content", utilise les slot_id des zones de texte du template choisi comme clés, et génère un texte court et évocateur avec formatage Markdown comme valeur. Inspire-toi des titres, descriptions et ambiances des images.`;
+}
 
-  // Call Gemini API with retry and timeout
-  const text = await retryWithBackoff(
+/**
+ * Call Gemini API with retry and timeout
+ */
+async function callGeminiAPI(prompt: string): Promise<string> {
+  const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-lite' });
+
+  return await retryWithBackoff(
     async () => {
       const result = await withTimeout(
         model.generateContent(prompt),
@@ -718,6 +825,103 @@ IMPORTANT: Pour "text_content", utilise les slot_id des zones de texte du templa
       }
     }
   );
+}
+
+/**
+ * Convert a single AI suggestion to PageData
+ */
+function convertSuggestionToPageData(
+  suggestion: any,
+  template: PageTemplate,
+  images: Image[],
+  position: number
+): { pageData: PageData; textZones: TextZoneInfo[] } {
+  const imageSlots = template.layout.slots.filter(s => s.type === 'image');
+  const textSlots = template.layout.slots.filter(s => s.type === 'text');
+
+  // Get assigned images for fallback content generation
+  const assignedImages = suggestion.image_ids
+    .map((id: string) => images.find((img: Image) => img.id === id))
+    .filter((img: Image | undefined): img is Image => img !== undefined);
+
+  // Determine context for formatting
+  const isFirstPage = position === 0;
+  const isChapterStart = position > 0 && suggestion.reasoning?.toLowerCase().includes('chapitre');
+  const mood = assignedImages[0]?.mood || undefined;
+  const context = { isFirstPage, isChapterStart, mood };
+
+  // Build text zones with suggested content from AI or fallback
+  const textZones: TextZoneInfo[] = textSlots.map(slot => {
+    let aiContent = suggestion.text_content?.[slot.id];
+    const analysis = analyzeTemplate(template);
+    const slotDesc = analysis.textSlotDescriptions.find(d => d.slot_id === slot.id);
+
+    // Apply rich text formatting to AI-generated content
+    if (aiContent) {
+      aiContent = enrichTextWithFormatting(aiContent, slot.id, context);
+    }
+
+    return {
+      slot_id: slot.id,
+      description: slotDesc?.description || 'Zone de texte',
+      suggested_content: aiContent || undefined
+    };
+  });
+
+  // If AI didn't provide content, fallback to heuristic generation
+  if (textZones.some(tz => !tz.suggested_content) && assignedImages.length > 0) {
+    const fallbackContent = generateTextContent(template, assignedImages, {
+      isFirstPage,
+      mood
+    });
+    for (const tz of textZones) {
+      if (!tz.suggested_content) {
+        const fallback = fallbackContent.find(fc => fc.slot_id === tz.slot_id);
+        if (fallback?.suggested_content) {
+          tz.suggested_content = fallback.suggested_content;
+        }
+      }
+    }
+  }
+
+  const pageData: PageData = {
+    slots: suggestion.image_ids.map((imageId: string, slotIndex: number) => {
+      const image = assignedImages.find((img: Image) => img.id === imageId);
+      const annotation = image ? createAutoAnnotation(image) : undefined;
+
+      return {
+        slot_id: imageSlots[slotIndex]?.id || `slot-${slotIndex}`,
+        image_id: imageId,
+        annotation
+      };
+    }),
+    // Pre-fill text slots with suggested content
+    textSlots: textZones
+      .filter(tz => tz.suggested_content)
+      .map(tz => ({
+        slot_id: tz.slot_id,
+        content: tz.suggested_content!
+      }))
+  };
+
+  return { pageData, textZones };
+}
+
+async function getAISuggestions(
+  images: Image[],
+  analyses: ImageAnalysis[],
+  templates: PageTemplate[],
+  options: { previousPages?: LayoutSuggestion[] } = {}
+): Promise<BookLayoutSuggestions> {
+  // Prepare data for AI
+  const imageDescriptions = prepareImageDescriptions(images, analyses);
+  const templateDescriptions = prepareTemplateDescriptions(templates);
+
+  // Build prompt with optional context
+  const prompt = buildAIPrompt(imageDescriptions, templateDescriptions, options);
+
+  // Call Gemini API
+  const text = await callGeminiAPI(prompt);
 
   // Extract and parse JSON from response
   const parsed = parseAIResponse(text);
@@ -740,74 +944,13 @@ IMPORTANT: Pour "text_content", utilise les slot_id des zones de texte du templa
       continue;
     }
 
-    // Get only image slots for proper assignment
-    const imageSlots = template.layout.slots.filter(s => s.type === 'image');
-    const textSlots = template.layout.slots.filter(s => s.type === 'text');
-
-    // Get assigned images for fallback content generation
-    const assignedImages = suggestion.image_ids
-      .map((id: string) => images.find((img: Image) => img.id === id))
-      .filter((img: Image | undefined): img is Image => img !== undefined);
-
-    // Determine context for formatting
-    const isFirstPage = position === 0;
-    const isChapterStart = position > 0 && suggestion.reasoning?.toLowerCase().includes('chapitre');
-    const mood = assignedImages[0]?.mood || undefined;
-    const context = { isFirstPage, isChapterStart, mood };
-
-    // Build text zones with suggested content from AI or fallback
-    const textZones: TextZoneInfo[] = textSlots.map(slot => {
-      let aiContent = suggestion.text_content?.[slot.id];
-      const analysis = analyzeTemplate(template);
-      const slotDesc = analysis.textSlotDescriptions.find(d => d.slot_id === slot.id);
-
-      // Apply rich text formatting to AI-generated content
-      if (aiContent) {
-        aiContent = enrichTextWithFormatting(aiContent, slot.id, context);
-      }
-
-      return {
-        slot_id: slot.id,
-        description: slotDesc?.description || 'Zone de texte',
-        suggested_content: aiContent || undefined
-      };
-    });
-
-    // If AI didn't provide content, fallback to heuristic generation
-    if (textZones.some(tz => !tz.suggested_content) && assignedImages.length > 0) {
-      const fallbackContent = generateTextContent(template, assignedImages, {
-        isFirstPage: position === 0,
-        mood: analyses[0]?.mood || undefined
-      });
-      for (const tz of textZones) {
-        if (!tz.suggested_content) {
-          const fallback = fallbackContent.find(fc => fc.slot_id === tz.slot_id);
-          if (fallback?.suggested_content) {
-            tz.suggested_content = fallback.suggested_content;
-          }
-        }
-      }
-    }
-
-    const pageData: PageData = {
-      slots: suggestion.image_ids.map((imageId: string, slotIndex: number) => {
-        const image = assignedImages.find((img: Image) => img.id === imageId);
-        const annotation = image ? createAutoAnnotation(image) : undefined;
-
-        return {
-          slot_id: imageSlots[slotIndex]?.id || `slot-${slotIndex}`,
-          image_id: imageId,
-          annotation
-        };
-      }),
-      // Pre-fill text slots with suggested content
-      textSlots: textZones
-        .filter(tz => tz.suggested_content)
-        .map(tz => ({
-          slot_id: tz.slot_id,
-          content: tz.suggested_content!
-        }))
-    };
+    // Convert suggestion to page data
+    const { pageData, textZones } = convertSuggestionToPageData(
+      suggestion,
+      template,
+      images,
+      position
+    );
 
     // Add text zone info to reasoning if present
     let reasoning = suggestion.reasoning;

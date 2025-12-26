@@ -148,6 +148,7 @@ Portfolios/
 | `NODE_ENV` | Environnement (development/production) | development |
 | `AI_REQUEST_TIMEOUT_MS` | Timeout pour les requêtes IA en millisecondes | 45000 |
 | `AI_MAX_RETRIES` | Nombre maximum de tentatives en cas d'échec réseau | 3 |
+| `AI_CACHE_TTL_MS` | Durée de vie du cache des suggestions IA en millisecondes | 900000 (15 min) |
 
 ## 📝 License
 
