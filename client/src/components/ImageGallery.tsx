@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Loader2, Sparkles, Trash2, X, ChevronLeft, ChevronRight, Tag, Pencil, Save, XCircle, Info, Smile, BookOpen } from 'lucide-react';
+import { Loader2, Sparkles, Trash2, X, ChevronLeft, ChevronRight, Tag, Pencil, Save, XCircle, Info, Smile, BookOpen, Check } from 'lucide-react';
 import { imagesApi, getMediumImageUrl, getThumbnailUrl } from '../api/client';
 import type { Image, Theme } from '../types';
 import { CreateBookFromPhotoModal } from './book/CreateBookFromPhotoModal';
+import { CreateBookFromPhotosModal } from './book/CreateBookFromPhotosModal';
 
 interface EditFormData {
   title: string;
@@ -34,6 +35,8 @@ export function ImageGallery({ themeId, themes, searchQuery, onImageUpdate }: Im
   const [availableTags, setAvailableTags] = useState<string[]>([]);
   const [availableMoods, setAvailableMoods] = useState<string[]>([]);
   const [showCreateBookModal, setShowCreateBookModal] = useState(false);
+  const [selectedImages, setSelectedImages] = useState<Set<string>>(new Set());
+  const [showCreateBookFromPhotosModal, setShowCreateBookFromPhotosModal] = useState(false);
   const observerRef = useRef<IntersectionObserver | null>(null);
   const loadMoreRef = useRef<HTMLDivElement>(null);
 
@@ -263,6 +266,35 @@ export function ImageGallery({ themeId, themes, searchQuery, onImageUpdate }: Im
     }
   };
 
+  const toggleImageSelection = (imageId: string) => {
+    setSelectedImages(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(imageId)) {
+        newSet.delete(imageId);
+      } else {
+        newSet.add(imageId);
+      }
+      return newSet;
+    });
+  };
+
+  const selectAll = () => {
+    setSelectedImages(new Set(images.map(img => img.id)));
+  };
+
+  const deselectAll = () => {
+    setSelectedImages(new Set());
+  };
+
+  const handleCreateBookFromSelectedPhotos = () => {
+    if (selectedImages.size === 0) return;
+    setShowCreateBookFromPhotosModal(true);
+  };
+
+  const getSelectedImageObjects = () => {
+    return images.filter(img => selectedImages.has(img.id));
+  };
+
   if (images.length === 0 && !loading) {
     return (
       <div className="text-center py-20 text-gray-400">
@@ -274,9 +306,33 @@ export function ImageGallery({ themeId, themes, searchQuery, onImageUpdate }: Im
 
   return (
     <>
-      {/* Stats */}
-      <div className="mb-4 text-sm text-gray-400">
-        {total} image{total > 1 ? 's' : ''} {themeId ? 'dans ce thème' : 'au total'}
+      {/* Stats and selection controls */}
+      <div className="mb-4 flex items-center justify-between">
+        <div className="text-sm text-gray-400">
+          {total} image{total > 1 ? 's' : ''} {themeId ? 'dans ce thème' : 'au total'}
+          {selectedImages.size > 0 && (
+            <span className="ml-2 text-indigo-400">
+              • {selectedImages.size} sélectionnée{selectedImages.size > 1 ? 's' : ''}
+            </span>
+          )}
+        </div>
+
+        {selectedImages.size > 0 && (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={deselectAll}
+              className="text-sm text-gray-400 hover:text-white transition-colors"
+            >
+              Tout désélectionner
+            </button>
+            <button
+              onClick={selectAll}
+              className="text-sm text-gray-400 hover:text-white transition-colors"
+            >
+              Tout sélectionner
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Advanced filters - always visible */}
@@ -349,36 +405,54 @@ export function ImageGallery({ themeId, themes, searchQuery, onImageUpdate }: Im
 
       {/* Grid */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
-        {images.map(image => (
-          <div
-            key={image.id}
-            className="group relative aspect-square cursor-pointer overflow-hidden rounded-lg bg-gray-800"
-            onClick={() => setSelectedImage(image)}
-          >
-            <img
-              src={getThumbnailUrl(image.filename)}
-              alt={image.title || image.original_name}
-              className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-              loading="lazy"
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+        {images.map(image => {
+          const isSelected = selectedImages.has(image.id);
+          return (
+            <div
+              key={image.id}
+              className="group relative aspect-square overflow-hidden rounded-lg bg-gray-800"
+            >
+              <img
+                src={getThumbnailUrl(image.filename)}
+                alt={image.title || image.original_name}
+                className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105 cursor-pointer"
+                loading="lazy"
+                onClick={() => setSelectedImage(image)}
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
 
-            {/* AI badge */}
-            {image.ai_enriched && (
-              <div className="absolute top-2 left-2">
-                <Sparkles className="w-4 h-4 text-amber-400" />
-              </div>
-            )}
+              {/* Selection checkbox */}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleImageSelection(image.id);
+                }}
+                className={`absolute top-2 right-2 w-6 h-6 rounded-md border-2 flex items-center justify-center transition-all ${
+                  isSelected
+                    ? 'bg-indigo-600 border-indigo-600'
+                    : 'bg-black/30 border-white/50 hover:border-white'
+                }`}
+              >
+                {isSelected && <Check className="w-4 h-4 text-white" />}
+              </button>
 
-            {/* Title on hover */}
-            <div className="absolute bottom-0 left-0 right-0 p-2 opacity-0 group-hover:opacity-100 transition-opacity">
-              <p className="text-sm font-medium truncate">{image.title || image.original_name}</p>
-              {image.mood && (
-                <p className="text-xs text-gray-300">{image.mood}</p>
+              {/* AI badge */}
+              {image.ai_enriched && (
+                <div className="absolute top-2 left-2 pointer-events-none">
+                  <Sparkles className="w-4 h-4 text-amber-400" />
+                </div>
               )}
+
+              {/* Title on hover */}
+              <div className="absolute bottom-0 left-0 right-0 p-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                <p className="text-sm font-medium truncate">{image.title || image.original_name}</p>
+                {image.mood && (
+                  <p className="text-xs text-gray-300">{image.mood}</p>
+                )}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Load more trigger */}
@@ -857,11 +931,37 @@ export function ImageGallery({ themeId, themes, searchQuery, onImageUpdate }: Im
         </div>
       )}
 
+      {/* Floating action button for selected photos */}
+      {selectedImages.size > 0 && (
+        <div className="fixed bottom-6 right-6 z-40">
+          <button
+            onClick={handleCreateBookFromSelectedPhotos}
+            className="flex items-center gap-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white px-6 py-4 rounded-full shadow-2xl transition-all transform hover:scale-105"
+          >
+            <BookOpen className="w-5 h-5" />
+            <span className="font-medium">
+              Créer un book ({selectedImages.size} photo{selectedImages.size > 1 ? 's' : ''})
+            </span>
+          </button>
+        </div>
+      )}
+
       {/* Create Book from Photo Modal */}
       {showCreateBookModal && selectedImage && (
         <CreateBookFromPhotoModal
           image={selectedImage}
           onClose={() => setShowCreateBookModal(false)}
+        />
+      )}
+
+      {/* Create Book from Multiple Photos Modal */}
+      {showCreateBookFromPhotosModal && (
+        <CreateBookFromPhotosModal
+          images={getSelectedImageObjects()}
+          onClose={() => {
+            setShowCreateBookFromPhotosModal(false);
+            deselectAll();
+          }}
         />
       )}
     </>
