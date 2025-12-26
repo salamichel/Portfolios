@@ -55,6 +55,7 @@ export function BookEditor() {
   const [suggestions, setSuggestions] = useState<LayoutSuggestion[]>([]);
   const [suggestionsReasoning, setSuggestionsReasoning] = useState('');
   const [generatingSuggestions, setGeneratingSuggestions] = useState(false);
+  const [selectedImageIds, setSelectedImageIds] = useState<string[]>([]);
 
   const loadBook = useCallback(async () => {
     if (!id) return;
@@ -194,12 +195,13 @@ export function BookEditor() {
     }
   };
 
-  const handleGenerateSuggestions = async (imageIds: string[]) => {
+  const handleGenerateSuggestions = async (imageIds: string[], useCache: boolean = true) => {
     if (!id || imageIds.length === 0) return;
 
     try {
       setGeneratingSuggestions(true);
-      const result = await booksApi.suggestLayout(id, imageIds);
+      setSelectedImageIds(imageIds); // Store image IDs for regeneration
+      const result = await booksApi.suggestLayout(id, imageIds, useCache);
       setSuggestions(result.suggestions);
       setSuggestionsReasoning(result.reasoning);
       setShowAISuggestions(true);
@@ -208,6 +210,12 @@ export function BookEditor() {
     } finally {
       setGeneratingSuggestions(false);
     }
+  };
+
+  const handleRegenerateSuggestions = async () => {
+    if (selectedImageIds.length === 0) return;
+    // Regenerate with cache disabled to get fresh suggestions
+    await handleGenerateSuggestions(selectedImageIds, false);
   };
 
   const handleApplySuggestions = async () => {
@@ -578,20 +586,31 @@ export function BookEditor() {
                 ))}
               </div>
 
-              <div className="flex justify-end gap-3">
+              <div className="flex justify-between gap-3">
                 <button
-                  onClick={() => setShowAISuggestions(false)}
-                  className="px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg"
+                  onClick={handleRegenerateSuggestions}
+                  disabled={generatingSuggestions}
+                  className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg disabled:opacity-50"
+                  title="Générer de nouvelles suggestions avec les mêmes images"
                 >
-                  Annuler
+                  <Wand2 className="w-4 h-4" />
+                  {generatingSuggestions ? 'Regénération...' : 'Regénérer'}
                 </button>
-                <button
-                  onClick={handleApplySuggestions}
-                  disabled={saving}
-                  className="px-4 py-2 bg-rose-500 hover:bg-rose-600 rounded-lg disabled:opacity-50"
-                >
-                  {saving ? 'Application...' : 'Appliquer les suggestions'}
-                </button>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setShowAISuggestions(false)}
+                    className="px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg"
+                  >
+                    Annuler
+                  </button>
+                  <button
+                    onClick={handleApplySuggestions}
+                    disabled={saving}
+                    className="px-4 py-2 bg-rose-500 hover:bg-rose-600 rounded-lg disabled:opacity-50"
+                  >
+                    {saving ? 'Application...' : 'Appliquer les suggestions'}
+                  </button>
+                </div>
               </div>
             </div>
           </div>

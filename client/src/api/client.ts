@@ -141,8 +141,8 @@ export const booksApi = {
     api.put<BookPage[]>(`/books/${bookId}/pages/reorder`, { orderedIds }).then(res => res.data),
 
   // AI Layout suggestions
-  suggestLayout: (bookId: string, imageIds: string[]) =>
-    api.post<BookLayoutSuggestions>(`/books/${bookId}/suggest-layout`, { image_ids: imageIds }).then(res => res.data),
+  suggestLayout: (bookId: string, imageIds: string[], useCache: boolean = true) =>
+    api.post<BookLayoutSuggestions>(`/books/${bookId}/suggest-layout`, { image_ids: imageIds, use_cache: useCache }).then(res => res.data),
 
   applySuggestions: (bookId: string, suggestions: LayoutSuggestion[]) =>
     api.post<BookPage[]>(`/books/${bookId}/apply-suggestions`, { suggestions }).then(res => res.data)
