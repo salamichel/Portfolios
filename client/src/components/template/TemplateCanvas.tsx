@@ -17,7 +17,7 @@ export function TemplateCanvas({ layout, onLayoutChange, isEditable, selectedSlo
   const [dragStart, setDragStart] = useState<{ x: number; y: number; initialX: number; initialY: number; initialWidth?: number; initialHeight?: number } | null>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
 
-  const snapToGrid = (value: number, gridSize: number = 5) => {
+  const snapToGrid = (value: number, gridSize: number = 1) => {
     return Math.round(value / gridSize) * gridSize;
   };
 
@@ -294,13 +294,17 @@ export function TemplateCanvas({ layout, onLayoutChange, isEditable, selectedSlo
         {/* Grid */}
         {showGrid && (
           <div className="absolute inset-0 pointer-events-none">
-            <svg width="100%" height="100%" className="opacity-20">
+            <svg width="100%" height="100%" className="opacity-30">
               <defs>
-                <pattern id="grid" width="5%" height="5%" patternUnits="userSpaceOnUse">
-                  <path d="M 50 0 L 0 0 0 50" fill="none" stroke="gray" strokeWidth="0.5" />
+                <pattern id="smallGrid" width="1%" height="1%" patternUnits="userSpaceOnUse">
+                  <path d="M 10 0 L 0 0 0 10" fill="none" stroke="#d1d5db" strokeWidth="0.3" />
+                </pattern>
+                <pattern id="largeGrid" width="10%" height="10%" patternUnits="userSpaceOnUse">
+                  <rect width="100%" height="100%" fill="url(#smallGrid)" />
+                  <path d="M 100 0 L 0 0 0 100" fill="none" stroke="#9ca3af" strokeWidth="0.8" />
                 </pattern>
               </defs>
-              <rect width="100%" height="100%" fill="url(#grid)" />
+              <rect width="100%" height="100%" fill="url(#largeGrid)" />
             </svg>
           </div>
         )}
