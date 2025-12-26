@@ -14,7 +14,7 @@ export function TemplateCanvas({ layout, onLayoutChange, isEditable, selectedSlo
   const [showGrid, setShowGrid] = useState(true);
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
-  const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(null);
+  const [dragStart, setDragStart] = useState<{ x: number; y: number; initialX: number; initialY: number; initialWidth?: number; initialHeight?: number } | null>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
 
   const snapToGrid = (value: number, gridSize: number = 5) => {
@@ -61,27 +61,36 @@ export function TemplateCanvas({ layout, onLayoutChange, isEditable, selectedSlo
     if (onSlotSelect) {
       onSlotSelect(slotId);
     }
-    setDragStart({ x: e.clientX, y: e.clientY });
+    const slot = layout.slots.find(s => s.id === slotId);
+    if (slot) {
+      setDragStart({
+        x: e.clientX,
+        y: e.clientY,
+        initialX: slot.x,
+        initialY: slot.y
+      });
+    }
   };
 
   const handleSlotDrag = (e: MouseEvent) => {
     if (!isDragging || !selectedSlotId || !dragStart || !canvasRef.current) return;
 
     const canvasRect = canvasRef.current.getBoundingClientRect();
-    const deltaX = ((e.clientX - dragStart.x) / canvasRect.width) * 200; // 200 because width can go up to 200%
+    // Calculate delta from initial position (not incremental)
+    const deltaX = ((e.clientX - dragStart.x) / canvasRect.width) * 100;
     const deltaY = ((e.clientY - dragStart.y) / canvasRect.height) * 100;
 
     const updatedSlots = layout.slots.map(slot => {
       if (slot.id === selectedSlotId) {
-        let newX = slot.x + deltaX;
-        let newY = slot.y + deltaY;
+        let newX = dragStart.initialX + deltaX;
+        let newY = dragStart.initialY + deltaY;
 
         // Snap to grid
         newX = snapToGrid(newX);
         newY = snapToGrid(newY);
 
-        // Boundaries
-        newX = Math.max(0, Math.min(newX, (slot.page === 'left' ? 100 : 200) - slot.width));
+        // Boundaries (x is relative to the page, so always 0-100)
+        newX = Math.max(0, Math.min(newX, 100 - slot.width));
         newY = Math.max(0, Math.min(newY, 100 - slot.height));
 
         return { ...slot, x: newX, y: newY };
@@ -90,7 +99,6 @@ export function TemplateCanvas({ layout, onLayoutChange, isEditable, selectedSlo
     });
 
     onLayoutChange({ slots: updatedSlots });
-    setDragStart({ x: e.clientX, y: e.clientY });
   };
 
   const handleSlotDragEnd = () => {
@@ -116,20 +124,31 @@ export function TemplateCanvas({ layout, onLayoutChange, isEditable, selectedSlo
     if (onSlotSelect) {
       onSlotSelect(slotId);
     }
-    setDragStart({ x: e.clientX, y: e.clientY });
+    const slot = layout.slots.find(s => s.id === slotId);
+    if (slot) {
+      setDragStart({
+        x: e.clientX,
+        y: e.clientY,
+        initialX: slot.x,
+        initialY: slot.y,
+        initialWidth: slot.width,
+        initialHeight: slot.height
+      });
+    }
   };
 
   const handleResize = (e: MouseEvent) => {
     if (!isResizing || !selectedSlotId || !dragStart || !canvasRef.current) return;
+    if (dragStart.initialWidth === undefined || dragStart.initialHeight === undefined) return;
 
     const canvasRect = canvasRef.current.getBoundingClientRect();
-    const deltaX = ((e.clientX - dragStart.x) / canvasRect.width) * 200;
+    const deltaX = ((e.clientX - dragStart.x) / canvasRect.width) * 100;
     const deltaY = ((e.clientY - dragStart.y) / canvasRect.height) * 100;
 
     const updatedSlots = layout.slots.map(slot => {
       if (slot.id === selectedSlotId) {
-        let newWidth = slot.width + deltaX;
-        let newHeight = slot.height + deltaY;
+        let newWidth = dragStart.initialWidth! + deltaX;
+        let newHeight = dragStart.initialHeight! + deltaY;
 
         // Snap to grid
         newWidth = snapToGrid(newWidth);
@@ -139,7 +158,7 @@ export function TemplateCanvas({ layout, onLayoutChange, isEditable, selectedSlo
         newWidth = Math.max(10, newWidth);
         newHeight = Math.max(10, newHeight);
 
-        // Maximum size
+        // Maximum size (width can span both pages, so up to 200)
         newWidth = Math.min(newWidth, 200 - slot.x);
         newHeight = Math.min(newHeight, 100 - slot.y);
 
@@ -149,7 +168,6 @@ export function TemplateCanvas({ layout, onLayoutChange, isEditable, selectedSlo
     });
 
     onLayoutChange({ slots: updatedSlots });
-    setDragStart({ x: e.clientX, y: e.clientY });
   };
 
   const handleResizeEnd = () => {
@@ -170,6 +188,8 @@ export function TemplateCanvas({ layout, onLayoutChange, isEditable, selectedSlo
 
   const renderSlot = (slot: LayoutSlot) => {
     const isSelected = selectedSlotId === slot.id;
+    const isBeingDragged = isDragging && isSelected;
+    const isBeingResized = isResizing && isSelected;
 
     // Calculate position
     const left = slot.page === 'left' ? slot.x : slot.x + 100;
@@ -177,7 +197,9 @@ export function TemplateCanvas({ layout, onLayoutChange, isEditable, selectedSlo
     return (
       <div
         key={slot.id}
-        className={`absolute border-2 transition-all ${
+        className={`absolute border-2 ${
+          !isBeingDragged && !isBeingResized ? 'transition-all' : ''
+        } ${
           isSelected
             ? 'border-rose-500 bg-rose-500/10 z-10'
             : 'border-gray-400 bg-gray-400/5 hover:border-rose-400'
