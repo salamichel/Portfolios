@@ -491,6 +491,23 @@ export const imageDb = {
     `).all() as { mood: string }[];
 
     return result.map(r => r.mood);
+  },
+
+  getUnenriched(): Image[] {
+    return db.prepare(`
+      SELECT * FROM images
+      WHERE ai_enriched = 0 OR ai_enriched IS NULL
+      ORDER BY created_at DESC
+    `).all() as Image[];
+  },
+
+  countUnenriched(): number {
+    const result = db.prepare(`
+      SELECT COUNT(*) as count
+      FROM images
+      WHERE ai_enriched = 0 OR ai_enriched IS NULL
+    `).get() as { count: number };
+    return result.count;
   }
 };
 

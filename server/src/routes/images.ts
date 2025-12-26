@@ -97,6 +97,18 @@ router.get('/metadata/moods', (req, res) => {
   }
 });
 
+// Get unenriched images (images without AI enrichment)
+router.get('/unenriched', (req, res) => {
+  try {
+    const images = imageDb.getUnenriched();
+    const count = imageDb.countUnenriched();
+    res.json({ images, count });
+  } catch (error) {
+    console.error('[API] Error fetching unenriched images:', error);
+    res.status(500).json({ error: 'Failed to fetch unenriched images' });
+  }
+});
+
 // Get all unique tags
 router.get('/meta/tags', (req, res) => {
   try {
@@ -258,6 +270,64 @@ router.post('/:id/enrich', async (req, res) => {
   } catch (error) {
     console.error('Enrich error:', error);
     res.status(500).json({ error: 'Failed to enrich image' });
+  }
+});
+
+// Batch enrich multiple images with Gemini
+router.post('/batch-enrich', async (req, res) => {
+  try {
+    if (!process.env.GEMINI_API_KEY) {
+      return res.status(400).json({ error: 'Gemini API key not configured' });
+    }
+
+    const { image_ids } = req.body;
+
+    if (!image_ids || !Array.isArray(image_ids) || image_ids.length === 0) {
+      return res.status(400).json({ error: 'image_ids array is required' });
+    }
+
+    const results = {
+      total: image_ids.length,
+      successful: 0,
+      failed: 0,
+      errors: [] as Array<{ id: string; error: string }>
+    };
+
+    for (const imageId of image_ids) {
+      try {
+        const image = imageDb.getById(imageId);
+        if (!image) {
+          results.failed++;
+          results.errors.push({ id: imageId, error: 'Image not found' });
+          continue;
+        }
+
+        // Use WebP version for Gemini
+        const baseName = path.basename(image.filename, path.extname(image.filename));
+        const webpPath = path.join(optimizedDir, `${baseName}.webp`);
+        const analysis = await analyzeImage(webpPath);
+
+        imageDb.update(imageId, {
+          title: analysis.title,
+          description: analysis.description,
+          tags: JSON.stringify(analysis.tags),
+          mood: analysis.mood,
+          ai_enriched: true
+        });
+
+        results.successful++;
+      } catch (error) {
+        results.failed++;
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        results.errors.push({ id: imageId, error: errorMessage });
+        console.error(`Failed to enrich image ${imageId}:`, error);
+      }
+    }
+
+    res.json(results);
+  } catch (error) {
+    console.error('Batch enrich error:', error);
+    res.status(500).json({ error: 'Failed to batch enrich images' });
   }
 });
 
