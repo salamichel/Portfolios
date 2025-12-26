@@ -32,8 +32,8 @@ export function TemplateMetadataModal({ name, description, category, layout, onS
       const result = await templatesApi.generateMetadata(layout);
       setEditedName(result.name);
       setEditedDescription(result.description);
-      if (result.category) {
-        setEditedCategory(result.category);
+      if (result.category && isValidCategory(result.category)) {
+        setEditedCategory(result.category as TemplateCategory);
       }
     } catch (error) {
       console.error('Failed to generate metadata:', error);
@@ -41,6 +41,10 @@ export function TemplateMetadataModal({ name, description, category, layout, onS
     } finally {
       setIsGenerating(false);
     }
+  };
+
+  const isValidCategory = (cat: string): cat is TemplateCategory => {
+    return ['cover', 'chapter', 'standard', 'gallery', 'highlight', 'narrative'].includes(cat);
   };
 
   return (
