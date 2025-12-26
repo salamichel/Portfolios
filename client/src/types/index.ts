@@ -55,11 +55,14 @@ export interface TemplateLayout {
   slots: LayoutSlot[];
 }
 
+export type TemplateCategory = 'cover' | 'chapter' | 'standard' | 'gallery' | 'highlight' | 'narrative';
+
 export interface PageTemplate {
   id: string;
   name: string;
   description: string | null;
   layout: TemplateLayout;
+  category: TemplateCategory;
   is_predefined: boolean;
   created_at: string;
   updated_at: string;

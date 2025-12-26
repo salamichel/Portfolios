@@ -1,25 +1,27 @@
 import { useState } from 'react';
 import { X, Sparkles } from 'lucide-react';
 import { templatesApi } from '../../api/client';
-import type { TemplateLayout } from '../../types';
+import type { TemplateLayout, TemplateCategory } from '../../types';
 
 interface TemplateMetadataModalProps {
   name: string;
   description: string | null;
+  category: TemplateCategory;
   layout: TemplateLayout;
-  onSave: (name: string, description: string) => void;
+  onSave: (name: string, description: string, category: TemplateCategory) => void;
   onClose: () => void;
 }
 
-export function TemplateMetadataModal({ name, description, layout, onSave, onClose }: TemplateMetadataModalProps) {
+export function TemplateMetadataModal({ name, description, category, layout, onSave, onClose }: TemplateMetadataModalProps) {
   const [editedName, setEditedName] = useState(name);
   const [editedDescription, setEditedDescription] = useState(description || '');
+  const [editedCategory, setEditedCategory] = useState<TemplateCategory>(category);
   const [isGenerating, setIsGenerating] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (editedName.trim()) {
-      onSave(editedName.trim(), editedDescription.trim());
+      onSave(editedName.trim(), editedDescription.trim(), editedCategory);
       onClose();
     }
   };
@@ -30,6 +32,9 @@ export function TemplateMetadataModal({ name, description, layout, onSave, onClo
       const result = await templatesApi.generateMetadata(layout);
       setEditedName(result.name);
       setEditedDescription(result.description);
+      if (result.category) {
+        setEditedCategory(result.category);
+      }
     } catch (error) {
       console.error('Failed to generate metadata:', error);
       alert('Erreur lors de la génération par IA');
@@ -77,7 +82,7 @@ export function TemplateMetadataModal({ name, description, layout, onSave, onClo
             />
           </div>
 
-          <div className="mb-6">
+          <div className="mb-4">
             <label className="block text-sm font-medium text-gray-300 mb-2">
               Description (optionnel)
             </label>
@@ -88,6 +93,24 @@ export function TemplateMetadataModal({ name, description, layout, onSave, onClo
               rows={3}
               className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white placeholder-gray-400 focus:outline-none focus:border-rose-500 resize-none"
             />
+          </div>
+
+          <div className="mb-6">
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              Catégorie
+            </label>
+            <select
+              value={editedCategory}
+              onChange={(e) => setEditedCategory(e.target.value as TemplateCategory)}
+              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-rose-500"
+            >
+              <option value="standard">Standard</option>
+              <option value="cover">Couverture</option>
+              <option value="chapter">Chapitre</option>
+              <option value="gallery">Galerie</option>
+              <option value="highlight">Mise en valeur</option>
+              <option value="narrative">Narrative</option>
+            </select>
           </div>
 
           <div className="flex justify-end gap-3">

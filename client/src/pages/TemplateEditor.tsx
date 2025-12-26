@@ -1,8 +1,8 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft, Layout as LayoutIcon, Plus, Save, Copy, Trash2, Edit2 } from 'lucide-react';
 import { templatesApi } from '../api/client';
-import type { PageTemplate, TemplateLayout, LayoutSlot } from '../types';
+import type { PageTemplate, TemplateLayout, LayoutSlot, TemplateCategory } from '../types';
 import { TemplateCanvas } from '../components/template/TemplateCanvas';
 import { SlotPropertiesPanel } from '../components/template/SlotPropertiesPanel';
 import { TemplateMetadataModal } from '../components/template/TemplateMetadataModal';
@@ -15,6 +15,7 @@ export function TemplateEditor() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showMetadataModal, setShowMetadataModal] = useState(false);
+  const [categoryFilter, setCategoryFilter] = useState<TemplateCategory | 'all'>('all');
 
   const loadTemplates = useCallback(async () => {
     try {
@@ -101,6 +102,7 @@ export function TemplateEditor() {
         name: name.trim(),
         description: selectedTemplate.description || undefined,
         layout: editedLayout || selectedTemplate.layout,
+        category: selectedTemplate.category || 'standard',
       });
 
       setTemplates([...templates, clonedTemplate]);
@@ -135,7 +137,8 @@ export function TemplateEditor() {
         name: name.trim(),
         layout: {
           slots: []
-        }
+        },
+        category: 'standard',
       });
 
       setTemplates([...templates, newTemplate]);
@@ -146,13 +149,14 @@ export function TemplateEditor() {
     }
   };
 
-  const handleSaveMetadata = async (name: string, description: string) => {
+  const handleSaveMetadata = async (name: string, description: string, category: string) => {
     if (!selectedTemplate || selectedTemplate.is_predefined) return;
 
     try {
       await templatesApi.update(selectedTemplate.id, {
         name,
         description: description || undefined,
+        category,
       });
 
       // Refresh templates
@@ -169,10 +173,29 @@ export function TemplateEditor() {
     }
   };
 
-  const predefinedTemplates = templates.filter(t => t.is_predefined);
-  const customTemplates = templates.filter(t => !t.is_predefined);
+  const predefinedTemplates = useMemo(() => {
+    return templates
+      .filter(t => t.is_predefined)
+      .filter(t => categoryFilter === 'all' || t.category === categoryFilter);
+  }, [templates, categoryFilter]);
+
+  const customTemplates = useMemo(() => {
+    return templates
+      .filter(t => !t.is_predefined)
+      .filter(t => categoryFilter === 'all' || t.category === categoryFilter);
+  }, [templates, categoryFilter]);
 
   const selectedSlot = editedLayout?.slots.find(s => s.id === selectedSlotId) || null;
+
+  const categoryLabels: Record<TemplateCategory | 'all', string> = {
+    all: 'Tous',
+    standard: 'Standard',
+    cover: 'Couverture',
+    chapter: 'Chapitre',
+    gallery: 'Galerie',
+    highlight: 'Mise en valeur',
+    narrative: 'Narrative',
+  };
 
   return (
     <div className="h-screen bg-gray-900 flex flex-col overflow-hidden">
@@ -214,6 +237,28 @@ export function TemplateEditor() {
         {/* Left Sidebar - Template List */}
         <aside className="w-80 border-r border-gray-800 bg-gray-900 flex flex-col">
           <div className="flex-1 overflow-y-auto p-4">
+            {/* Category Filter */}
+            <div className="mb-4">
+              <h3 className="text-sm font-semibold text-gray-400 uppercase mb-3">
+                Catégorie
+              </h3>
+              <div className="flex flex-wrap gap-2">
+                {(['all', 'standard', 'cover', 'chapter', 'gallery', 'highlight', 'narrative'] as const).map((cat) => (
+                  <button
+                    key={cat}
+                    onClick={() => setCategoryFilter(cat)}
+                    className={`px-3 py-1.5 text-xs rounded-lg transition-colors ${
+                      categoryFilter === cat
+                        ? 'bg-rose-500 text-white'
+                        : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                    }`}
+                  >
+                    {categoryLabels[cat]}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             {/* Predefined Templates */}
             <div className="mb-6">
               <h3 className="text-sm font-semibold text-gray-400 uppercase mb-3">
@@ -235,7 +280,12 @@ export function TemplateEditor() {
                           : 'bg-gray-800 border-2 border-transparent hover:border-gray-700'
                       }`}
                     >
-                      <div className="font-medium text-white mb-1">{template.name}</div>
+                      <div className="flex items-center justify-between mb-1">
+                        <div className="font-medium text-white">{template.name}</div>
+                        <span className="text-xs px-2 py-0.5 rounded bg-gray-700 text-gray-300">
+                          {categoryLabels[template.category]}
+                        </span>
+                      </div>
                       {template.description && (
                         <div className="text-xs text-gray-400 line-clamp-2">{template.description}</div>
                       )}
@@ -267,7 +317,12 @@ export function TemplateEditor() {
                           : 'bg-gray-800 border-2 border-transparent hover:border-gray-700'
                       }`}
                     >
-                      <div className="font-medium text-white mb-1">{template.name}</div>
+                      <div className="flex items-center justify-between mb-1">
+                        <div className="font-medium text-white">{template.name}</div>
+                        <span className="text-xs px-2 py-0.5 rounded bg-gray-700 text-gray-300">
+                          {categoryLabels[template.category]}
+                        </span>
+                      </div>
                       {template.description && (
                         <div className="text-xs text-gray-400 line-clamp-2">{template.description}</div>
                       )}
@@ -379,6 +434,7 @@ export function TemplateEditor() {
         <TemplateMetadataModal
           name={selectedTemplate.name}
           description={selectedTemplate.description}
+          category={selectedTemplate.category}
           layout={editedLayout}
           onSave={handleSaveMetadata}
           onClose={() => setShowMetadataModal(false)}
