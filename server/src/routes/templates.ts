@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { templateDb } from '../database.js';
+import { generateTemplateMetadata } from '../services/bookLayoutAI.js';
 
 const router = Router();
 
@@ -76,6 +77,23 @@ router.put('/:id', (req, res) => {
     res.json(template);
   } catch (error) {
     res.status(500).json({ error: 'Failed to update template' });
+  }
+});
+
+// Generate template metadata with AI
+router.post('/generate-metadata', async (req, res) => {
+  try {
+    const { layout } = req.body;
+
+    if (!layout || !Array.isArray(layout.slots)) {
+      return res.status(400).json({ error: 'Valid layout with slots is required' });
+    }
+
+    const metadata = await generateTemplateMetadata(layout);
+    res.json(metadata);
+  } catch (error) {
+    console.error('Error generating template metadata:', error);
+    res.status(500).json({ error: 'Failed to generate template metadata' });
   }
 });
 

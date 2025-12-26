@@ -375,10 +375,11 @@ export function TemplateEditor() {
       </div>
 
       {/* Metadata Modal */}
-      {showMetadataModal && selectedTemplate && !selectedTemplate.is_predefined && (
+      {showMetadataModal && selectedTemplate && !selectedTemplate.is_predefined && editedLayout && (
         <TemplateMetadataModal
           name={selectedTemplate.name}
           description={selectedTemplate.description}
+          layout={editedLayout}
           onSave={handleSaveMetadata}
           onClose={() => setShowMetadataModal(false)}
         />

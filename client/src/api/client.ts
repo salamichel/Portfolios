@@ -104,7 +104,10 @@ export const templatesApi = {
   update: (id: string, data: Partial<PageTemplate>) =>
     api.put<PageTemplate>(`/templates/${id}`, data).then(res => res.data),
 
-  delete: (id: string) => api.delete(`/templates/${id}`)
+  delete: (id: string) => api.delete(`/templates/${id}`),
+
+  generateMetadata: (layout: { slots: any[] }) =>
+    api.post<{ name: string; description: string }>('/templates/generate-metadata', { layout }).then(res => res.data)
 };
 
 // Books API
