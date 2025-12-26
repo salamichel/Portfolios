@@ -4,6 +4,11 @@ import type { Image, PageTemplate, TemplateLayout, PageData, LayoutSlot, SlotAnn
 // Use dedicated book API key, fallback to general Gemini key for backward compatibility
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_BOOK_API_KEY || process.env.GEMINI_API_KEY || '');
 
+// Configuration constants
+const AI_REQUEST_TIMEOUT_MS = parseInt(process.env.AI_REQUEST_TIMEOUT_MS || '45000', 10); // 45 seconds default
+const AI_MAX_RETRIES = parseInt(process.env.AI_MAX_RETRIES || '3', 10); // 3 retries default
+const AI_RETRY_BASE_DELAY_MS = 2000; // Start with 2 seconds
+
 export interface TextZoneInfo {
   slot_id: string;
   description: string;
@@ -434,6 +439,82 @@ export async function suggestBookLayout(
 }
 
 /**
+ * Helper function to add timeout to a promise
+ */
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(`Request timeout after ${timeoutMs}ms`)), timeoutMs)
+    )
+  ]);
+}
+
+/**
+ * Helper function to add delay (for retry backoff)
+ */
+function delay(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * Helper function to retry a function with exponential backoff
+ */
+async function retryWithBackoff<T>(
+  fn: () => Promise<T>,
+  options: {
+    maxRetries?: number;
+    baseDelayMs?: number;
+    onRetry?: (error: Error, attempt: number) => void;
+  } = {}
+): Promise<T> {
+  const { maxRetries = AI_MAX_RETRIES, baseDelayMs = AI_RETRY_BASE_DELAY_MS, onRetry } = options;
+
+  let lastError: Error | null = null;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+
+      // Don't retry on the last attempt
+      if (attempt === maxRetries) {
+        break;
+      }
+
+      // Check if error is retryable (network errors, timeouts, rate limits)
+      const isRetryable =
+        lastError.message.includes('timeout') ||
+        lastError.message.includes('network') ||
+        lastError.message.includes('ECONNRESET') ||
+        lastError.message.includes('ETIMEDOUT') ||
+        lastError.message.includes('429') || // Rate limit
+        lastError.message.includes('503') || // Service unavailable
+        lastError.message.includes('500');   // Internal server error
+
+      if (!isRetryable) {
+        // Non-retryable error, throw immediately
+        throw lastError;
+      }
+
+      // Calculate exponential backoff delay: 2s, 4s, 8s
+      const delayMs = baseDelayMs * Math.pow(2, attempt);
+
+      if (onRetry) {
+        onRetry(lastError, attempt + 1);
+      }
+
+      console.log(`AI request failed (attempt ${attempt + 1}/${maxRetries + 1}), retrying in ${delayMs}ms...`, lastError.message);
+
+      await delay(delayMs);
+    }
+  }
+
+  throw lastError || new Error('Unknown error during retry');
+}
+
+/**
  * Helper function to safely parse AI JSON response
  * Handles responses wrapped in markdown code blocks or with surrounding text
  */
@@ -621,9 +702,22 @@ Réponds en JSON avec ce format exact :
 
 IMPORTANT: Pour "text_content", utilise les slot_id des zones de texte du template choisi comme clés, et génère un texte court et évocateur avec formatage Markdown comme valeur. Inspire-toi des titres, descriptions et ambiances des images.`;
 
-  const result = await model.generateContent(prompt);
-  const response = await result.response;
-  const text = response.text();
+  // Call Gemini API with retry and timeout
+  const text = await retryWithBackoff(
+    async () => {
+      const result = await withTimeout(
+        model.generateContent(prompt),
+        AI_REQUEST_TIMEOUT_MS
+      );
+      const response = await result.response;
+      return response.text();
+    },
+    {
+      onRetry: (error, attempt) => {
+        console.log(`Gemini API retry ${attempt}/${AI_MAX_RETRIES}:`, error.message);
+      }
+    }
+  );
 
   // Extract and parse JSON from response
   const parsed = parseAIResponse(text);
@@ -902,8 +996,21 @@ Respond ONLY with valid JSON in this format:
 }`;
 
   try {
-    const result = await model.generateContent(prompt);
-    const text = result.response.text().trim();
+    // Call Gemini API with retry and timeout
+    const text = await retryWithBackoff(
+      async () => {
+        const result = await withTimeout(
+          model.generateContent(prompt),
+          AI_REQUEST_TIMEOUT_MS
+        );
+        return result.response.text().trim();
+      },
+      {
+        onRetry: (error, attempt) => {
+          console.log(`Template metadata generation retry ${attempt}/${AI_MAX_RETRIES}:`, error.message);
+        }
+      }
+    );
 
     let jsonText = text;
     if (text.includes('```json')) {
