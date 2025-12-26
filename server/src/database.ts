@@ -778,6 +778,45 @@ export const templateDb = {
             { id: 'description', type: 'text', page: 'right', x: 10, y: 15, width: 80, height: 70 }
           ]
         }
+      },
+      // Templates Zig Zag
+      {
+        id: 'tpl-zigzag-3-rows',
+        name: 'Zig Zag 3 lignes',
+        description: 'Trois lignes alternées : image gauche/texte droite, texte gauche/image droite, image gauche/texte droite',
+        is_predefined: true,
+        layout: {
+          slots: [
+            // Ligne 1: image gauche, texte droite
+            { id: 'img-1', type: 'image', page: 'left', x: 5, y: 3, width: 90, height: 30 },
+            { id: 'text-1', type: 'text', page: 'right', x: 10, y: 5, width: 80, height: 26 },
+            // Ligne 2: texte gauche, image droite
+            { id: 'text-2', type: 'text', page: 'left', x: 10, y: 37, width: 80, height: 26 },
+            { id: 'img-2', type: 'image', page: 'right', x: 5, y: 35, width: 90, height: 30 },
+            // Ligne 3: image gauche, texte droite
+            { id: 'img-3', type: 'image', page: 'left', x: 5, y: 69, width: 90, height: 28 },
+            { id: 'text-3', type: 'text', page: 'right', x: 10, y: 71, width: 80, height: 24 }
+          ]
+        }
+      },
+      {
+        id: 'tpl-zigzag-3-reverse',
+        name: 'Zig Zag 3 lignes inversé',
+        description: 'Trois lignes alternées : texte gauche/image droite, image gauche/texte droite, texte gauche/image droite',
+        is_predefined: true,
+        layout: {
+          slots: [
+            // Ligne 1: texte gauche, image droite
+            { id: 'text-1', type: 'text', page: 'left', x: 10, y: 5, width: 80, height: 26 },
+            { id: 'img-1', type: 'image', page: 'right', x: 5, y: 3, width: 90, height: 30 },
+            // Ligne 2: image gauche, texte droite
+            { id: 'img-2', type: 'image', page: 'left', x: 5, y: 35, width: 90, height: 30 },
+            { id: 'text-2', type: 'text', page: 'right', x: 10, y: 37, width: 80, height: 26 },
+            // Ligne 3: texte gauche, image droite
+            { id: 'text-3', type: 'text', page: 'left', x: 10, y: 71, width: 80, height: 24 },
+            { id: 'img-3', type: 'image', page: 'right', x: 5, y: 69, width: 90, height: 28 }
+          ]
+        }
       }
     ];
 

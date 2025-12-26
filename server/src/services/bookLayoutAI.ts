@@ -302,6 +302,17 @@ function selectBestTemplate(
         if (template.id === 'tpl-image-text-right' || template.id === 'tpl-text-image-left') {
           score += 15;
         }
+        // Zig-zag templates are excellent for rich narrative with metadata
+        if (template.id === 'tpl-zigzag-3-rows' || template.id === 'tpl-zigzag-3-reverse') {
+          score += 25; // High score for narrative storytelling
+          // Additional bonus if we have exactly 3 images with metadata
+          if (count >= 3) {
+            const richImages = images.slice(0, 3).filter(img => img.has_metadata).length;
+            if (richImages >= 2) {
+              score += 10; // Extra bonus for well-documented images
+            }
+          }
+        }
       }
     }
 
@@ -389,8 +400,19 @@ Crée une disposition cohérente et artistique en suivant ces principes :
    - Propose un template avec titre (tpl-title-image) pour la première page
    - Propose des templates avec légendes (tpl-images-caption, tpl-gallery-text) pour les images ayant des métadonnées
    - Propose des templates image+texte (tpl-image-text-right, tpl-text-image-left) pour créer du rythme
+   - Propose des templates zig-zag (tpl-zigzag-3-rows, tpl-zigzag-3-reverse) pour une narration dynamique
    - Propose un template chapitre (tpl-chapter-intro) lors des changements d'ambiance
 7. Pour chaque zone de texte, génère un contenu approprié basé sur les métadonnées des images (title, description, tags, mood)
+8. MISE EN FORME DU TEXTE : Utilise les balises Markdown pour enrichir le texte :
+   - **texte** pour mettre en gras (emphase forte)
+   - *texte* pour mettre en italique (emphase légère, citations)
+   - # Titre pour un grand titre (xlarge)
+   - ## Sous-titre pour un titre moyen (large)
+   - Varie les tailles et les emphases pour créer une hiérarchie visuelle
+   - Exemples :
+     * "# **Voyage en Islande**\n*Une aventure au cœur des glaciers*"
+     * "**Lumière du soir** sur les *fjords norvégiens*"
+     * "## Chapitre 2\nLes montagnes nous **appellent** avec leur *silence majestueux*"
 
 NOTE: Le nombre d'images par template correspond à "image_slot_count", pas au nombre total de slots.
 
@@ -402,14 +424,14 @@ Réponds en JSON avec ce format exact :
       "image_ids": ["id1", "id2"],
       "reasoning": "courte explication du choix",
       "text_content": {
-        "slot_id": "contenu suggéré pour cette zone de texte"
+        "slot_id": "contenu suggéré avec balises Markdown pour le formatage"
       }
     }
   ],
   "overall_reasoning": "explication de la logique globale"
 }
 
-IMPORTANT: Pour "text_content", utilise les slot_id des zones de texte du template choisi comme clés, et génère un texte court et évocateur comme valeur. Inspire-toi des titres, descriptions et ambiances des images.`;
+IMPORTANT: Pour "text_content", utilise les slot_id des zones de texte du template choisi comme clés, et génère un texte court et évocateur avec formatage Markdown comme valeur. Inspire-toi des titres, descriptions et ambiances des images.`;
 
   const result = await model.generateContent(prompt);
   const response = await result.response;

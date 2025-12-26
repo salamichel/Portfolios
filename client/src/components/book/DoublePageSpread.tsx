@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { Plus, X, Type, Edit3 } from 'lucide-react';
 import { getMediumImageUrl } from '../../api/client';
+import { renderRichText, hasRichFormatting } from '../../utils/richTextParser';
 import type { BookPage, PageTemplate, Image, LayoutSlot, PageSlotData, TextSlotData, TextStyle } from '../../types';
 
 interface DoublePageSpreadProps {
@@ -237,6 +238,7 @@ export function DoublePageSpread({ page, template, onSlotClick, onRemoveImage, o
     if (hasContent) {
       const styleClasses = getTextStyleClasses(textData?.style);
       const textColor = textData?.style?.color || '#1f2937';
+      const isRichText = hasRichFormatting(textData!.content);
 
       return (
         <div className="relative w-full h-full overflow-hidden p-3">
@@ -244,9 +246,13 @@ export function DoublePageSpread({ page, template, onSlotClick, onRemoveImage, o
             className={`w-full h-full overflow-auto ${styleClasses}`}
             style={{ color: textColor }}
           >
-            {textData?.content.split('\n').map((line, i) => (
-              <p key={i} className="mb-2 last:mb-0">{line || '\u00A0'}</p>
-            ))}
+            {isRichText ? (
+              renderRichText(textData!.content, styleClasses, textColor)
+            ) : (
+              textData?.content.split('\n').map((line, i) => (
+                <p key={i} className="mb-2 last:mb-0">{line || '\u00A0'}</p>
+              ))
+            )}
           </div>
 
           {/* Edit overlay on hover */}
