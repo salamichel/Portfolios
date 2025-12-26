@@ -31,7 +31,7 @@ router.get('/:id', (req, res) => {
 // Create custom template
 router.post('/', (req, res) => {
   try {
-    const { name, description, layout } = req.body;
+    const { name, description, layout, category } = req.body;
 
     if (!name || typeof name !== 'string' || name.trim().length === 0) {
       return res.status(400).json({ error: 'Template name is required' });
@@ -46,6 +46,7 @@ router.post('/', (req, res) => {
       name: name.trim(),
       description: description?.trim() || null,
       layout,
+      category: category || 'standard',
       is_predefined: false
     });
 
@@ -67,11 +68,12 @@ router.put('/:id', (req, res) => {
       return res.status(403).json({ error: 'Cannot modify predefined templates' });
     }
 
-    const { name, description, layout } = req.body;
+    const { name, description, layout, category } = req.body;
     const template = templateDb.update(req.params.id, {
       name: name?.trim(),
       description: description?.trim(),
-      layout
+      layout,
+      category
     });
 
     res.json(template);
