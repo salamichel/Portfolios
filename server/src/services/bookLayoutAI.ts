@@ -433,6 +433,110 @@ export async function suggestBookLayout(
   return getHeuristicSuggestions(images, analyses, templates);
 }
 
+/**
+ * Helper function to safely parse AI JSON response
+ * Handles responses wrapped in markdown code blocks or with surrounding text
+ */
+function parseAIResponse(text: string): any {
+  let jsonText = text.trim();
+
+  // Try to extract JSON from markdown code blocks
+  if (jsonText.includes('```json')) {
+    const match = jsonText.match(/```json\s*([\s\S]*?)\s*```/);
+    if (match) {
+      jsonText = match[1].trim();
+    }
+  } else if (jsonText.includes('```')) {
+    const match = jsonText.match(/```\s*([\s\S]*?)\s*```/);
+    if (match) {
+      jsonText = match[1].trim();
+    }
+  } else {
+    // Try to extract JSON object from text
+    const match = jsonText.match(/(\{[\s\S]*\})/);
+    if (match) {
+      jsonText = match[1];
+    }
+  }
+
+  // Parse JSON
+  try {
+    return JSON.parse(jsonText);
+  } catch (error) {
+    throw new Error(`Failed to parse AI response as JSON: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+}
+
+/**
+ * Validates AI response schema and data integrity
+ */
+function validateAIResponse(
+  parsed: any,
+  images: Image[],
+  templates: PageTemplate[]
+): { isValid: boolean; errors: string[] } {
+  const errors: string[] = [];
+
+  // Check basic structure
+  if (!parsed || typeof parsed !== 'object') {
+    errors.push('Response is not an object');
+    return { isValid: false, errors };
+  }
+
+  if (!Array.isArray(parsed.suggestions)) {
+    errors.push('Missing or invalid "suggestions" array');
+    return { isValid: false, errors };
+  }
+
+  // Build lookup maps for fast validation
+  const validImageIds = new Set(images.map(img => img.id));
+  const validTemplateIds = new Set(templates.map(t => t.id));
+
+  // Validate each suggestion
+  parsed.suggestions.forEach((suggestion: any, index: number) => {
+    const prefix = `Suggestion ${index + 1}`;
+
+    // Check template_id
+    if (!suggestion.template_id) {
+      errors.push(`${prefix}: Missing template_id`);
+    } else if (!validTemplateIds.has(suggestion.template_id)) {
+      errors.push(`${prefix}: Invalid template_id "${suggestion.template_id}"`);
+    }
+
+    // Check image_ids
+    if (!Array.isArray(suggestion.image_ids)) {
+      errors.push(`${prefix}: Missing or invalid image_ids array`);
+    } else {
+      suggestion.image_ids.forEach((imageId: string, imgIndex: number) => {
+        if (!validImageIds.has(imageId)) {
+          errors.push(`${prefix}: Invalid image_id "${imageId}" at index ${imgIndex}`);
+        }
+      });
+
+      // Check if image count matches template slots
+      if (suggestion.template_id && validTemplateIds.has(suggestion.template_id)) {
+        const template = templates.find(t => t.id === suggestion.template_id);
+        if (template) {
+          const imageSlotCount = template.layout.slots.filter(s => s.type === 'image').length;
+          if (suggestion.image_ids.length !== imageSlotCount) {
+            errors.push(`${prefix}: Template "${template.name}" requires ${imageSlotCount} images but got ${suggestion.image_ids.length}`);
+          }
+        }
+      }
+    }
+
+    // Validate text_content if present
+    if (suggestion.text_content && typeof suggestion.text_content !== 'object') {
+      errors.push(`${prefix}: text_content must be an object`);
+    }
+  });
+
+  return {
+    isValid: errors.length === 0,
+    errors
+  };
+}
+
 async function getAISuggestions(
   images: Image[],
   analyses: ImageAnalysis[],
@@ -521,13 +625,15 @@ IMPORTANT: Pour "text_content", utilise les slot_id des zones de texte du templa
   const response = await result.response;
   const text = response.text();
 
-  // Extract JSON from response
-  const jsonMatch = text.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) {
-    throw new Error('Could not parse AI response');
-  }
+  // Extract and parse JSON from response
+  const parsed = parseAIResponse(text);
 
-  const parsed = JSON.parse(jsonMatch[0]);
+  // Validate AI response
+  const validation = validateAIResponse(parsed, images, templates);
+  if (!validation.isValid) {
+    console.error('AI response validation failed:', validation.errors);
+    throw new Error(`Invalid AI response: ${validation.errors.join('; ')}`);
+  }
 
   // Convert AI suggestions to our format
   const suggestions: LayoutSuggestion[] = [];
@@ -535,7 +641,10 @@ IMPORTANT: Pour "text_content", utilise les slot_id des zones de texte du templa
 
   for (const suggestion of parsed.suggestions) {
     const template = templates.find(t => t.id === suggestion.template_id);
-    if (!template) continue;
+    if (!template) {
+      console.warn(`Skipping suggestion with invalid template_id: ${suggestion.template_id}`);
+      continue;
+    }
 
     // Get only image slots for proper assignment
     const imageSlots = template.layout.slots.filter(s => s.type === 'image');
