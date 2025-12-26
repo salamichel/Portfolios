@@ -212,8 +212,8 @@ export function TemplateEditor() {
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden">
         {/* Left Sidebar - Template List */}
-        <aside className="w-80 border-r border-gray-800 bg-gray-900 flex flex-col">
-          <div className="flex-1 overflow-y-auto p-4">
+        <aside className="w-80 border-r border-gray-800 bg-gray-900 overflow-y-auto">
+          <div className="p-4">
             {/* Predefined Templates */}
             <div className="mb-6">
               <h3 className="text-sm font-semibold text-gray-400 uppercase mb-3">
