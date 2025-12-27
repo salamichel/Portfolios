@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import {
   ArrowLeft, Plus, Trash2, Wand2, ChevronLeft, ChevronRight,
-  LayoutGrid, BookOpen, Presentation, Type, Settings
+  LayoutGrid, BookOpen, Presentation, Type, Settings, Loader2
 } from 'lucide-react';
 import { booksApi, templatesApi, themesApi } from '../api/client';
 import type { Book, BookPage, PageTemplate, Theme, LayoutSuggestion, Image, SlotAnnotation, TextSlotData } from '../types';
@@ -419,22 +419,34 @@ export function BookEditor() {
                 <button
                   onClick={handleReorganizeBook}
                   disabled={generatingSuggestions}
-                  className="flex items-center gap-2 px-3 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors disabled:opacity-50"
+                  className="flex items-center gap-2 px-3 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   title="Réorganiser le book avec l'IA"
                 >
-                  <LayoutGrid className="w-4 h-4" />
-                  <span className="hidden sm:inline">Réorganiser</span>
+                  {generatingSuggestions ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <LayoutGrid className="w-4 h-4" />
+                  )}
+                  <span className="hidden sm:inline">
+                    {generatingSuggestions ? 'Génération...' : 'Réorganiser'}
+                  </span>
                 </button>
               </>
             )}
 
             <button
               onClick={() => setShowImageSelector(true)}
-              className="flex items-center gap-2 px-3 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors"
+              className="flex items-center gap-2 px-3 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               disabled={generatingSuggestions}
             >
-              <Wand2 className="w-4 h-4" />
-              <span className="hidden sm:inline">Assistant IA</span>
+              {generatingSuggestions ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Wand2 className="w-4 h-4" />
+              )}
+              <span className="hidden sm:inline">
+                {generatingSuggestions ? 'Génération...' : 'Assistant IA'}
+              </span>
             </button>
 
             <button
