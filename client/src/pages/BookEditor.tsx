@@ -56,6 +56,7 @@ export function BookEditor() {
   const [suggestionsReasoning, setSuggestionsReasoning] = useState('');
   const [generatingSuggestions, setGeneratingSuggestions] = useState(false);
   const [selectedImageIds, setSelectedImageIds] = useState<string[]>([]);
+  const [isReorganizing, setIsReorganizing] = useState(false);
 
   const loadBook = useCallback(async () => {
     if (!id) return;
@@ -195,12 +196,13 @@ export function BookEditor() {
     }
   };
 
-  const handleGenerateSuggestions = async (imageIds: string[], useCache: boolean = true) => {
+  const handleGenerateSuggestions = async (imageIds: string[], useCache: boolean = true, isReorg: boolean = false) => {
     if (!id || imageIds.length === 0) return;
 
     try {
       setGeneratingSuggestions(true);
       setSelectedImageIds(imageIds); // Store image IDs for regeneration
+      setIsReorganizing(isReorg); // Track if this is a reorganization
       const result = await booksApi.suggestLayout(id, imageIds, useCache);
       setSuggestions(result.suggestions);
       setSuggestionsReasoning(result.reasoning);
@@ -218,15 +220,51 @@ export function BookEditor() {
     await handleGenerateSuggestions(selectedImageIds, false);
   };
 
-  const handleApplySuggestions = async () => {
+  const handleReorganizeBook = async () => {
+    if (!id || pages.length === 0) return;
+
+    // Extract all unique image IDs from existing pages
+    const imageIds = new Set<string>();
+    pages.forEach(page => {
+      page.page_data?.slots?.forEach(slot => {
+        if (slot.image_id) {
+          imageIds.add(slot.image_id);
+        }
+      });
+    });
+
+    const imageIdsArray = Array.from(imageIds);
+    if (imageIdsArray.length === 0) {
+      console.warn('No images found in existing pages');
+      return;
+    }
+
+    // Generate new suggestions with same images (bypass cache for fresh layout, mark as reorganization)
+    await handleGenerateSuggestions(imageIdsArray, false, true);
+  };
+
+  const handleApplySuggestions = async (replaceExisting: boolean = false) => {
     if (!id || suggestions.length === 0) return;
 
     try {
       setSaving(true);
-      const newPages = await booksApi.applySuggestions(id, suggestions);
-      setPages([...pages, ...newPages]);
+
+      if (replaceExisting && pages.length > 0) {
+        // Delete all existing pages first
+        await Promise.all(pages.map(page => booksApi.deletePage(id, page.id)));
+
+        // Then add new suggestions
+        const newPages = await booksApi.applySuggestions(id, suggestions);
+        setPages(newPages);
+      } else {
+        // Add suggestions to existing pages
+        const newPages = await booksApi.applySuggestions(id, suggestions);
+        setPages([...pages, ...newPages]);
+      }
+
       setShowAISuggestions(false);
       setSuggestions([]);
+      setIsReorganizing(false);
     } catch (error) {
       console.error('Failed to apply suggestions:', error);
     } finally {
@@ -369,13 +407,25 @@ export function BookEditor() {
 
           <div className="flex items-center gap-2">
             {pages.length > 0 && (
-              <button
-                onClick={() => setShowSlideshow(true)}
-                className="flex items-center gap-2 px-3 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors"
-              >
-                <Presentation className="w-4 h-4" />
-                <span className="hidden sm:inline">Présenter</span>
-              </button>
+              <>
+                <button
+                  onClick={() => setShowSlideshow(true)}
+                  className="flex items-center gap-2 px-3 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors"
+                >
+                  <Presentation className="w-4 h-4" />
+                  <span className="hidden sm:inline">Présenter</span>
+                </button>
+
+                <button
+                  onClick={handleReorganizeBook}
+                  disabled={generatingSuggestions}
+                  className="flex items-center gap-2 px-3 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors disabled:opacity-50"
+                  title="Réorganiser le book avec l'IA"
+                >
+                  <LayoutGrid className="w-4 h-4" />
+                  <span className="hidden sm:inline">Réorganiser</span>
+                </button>
+              </>
             )}
 
             <button
@@ -598,18 +648,42 @@ export function BookEditor() {
                 </button>
                 <div className="flex gap-3">
                   <button
-                    onClick={() => setShowAISuggestions(false)}
+                    onClick={() => {
+                      setShowAISuggestions(false);
+                      setIsReorganizing(false);
+                    }}
                     className="px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg"
                   >
                     Annuler
                   </button>
-                  <button
-                    onClick={handleApplySuggestions}
-                    disabled={saving}
-                    className="px-4 py-2 bg-rose-500 hover:bg-rose-600 rounded-lg disabled:opacity-50"
-                  >
-                    {saving ? 'Application...' : 'Appliquer les suggestions'}
-                  </button>
+                  {isReorganizing ? (
+                    <>
+                      <button
+                        onClick={() => handleApplySuggestions(false)}
+                        disabled={saving}
+                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg disabled:opacity-50"
+                        title="Ajouter ces pages en plus des pages existantes"
+                      >
+                        {saving ? 'Ajout...' : 'Ajouter'}
+                      </button>
+                      <button
+                        onClick={() => handleApplySuggestions(true)}
+                        disabled={saving}
+                        className="px-4 py-2 bg-rose-500 hover:bg-rose-600 rounded-lg disabled:opacity-50"
+                        title="Remplacer toutes les pages existantes par ces nouvelles pages"
+                      >
+                        {saving ? 'Remplacement...' : 'Remplacer tout'}
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      onClick={() => handleApplySuggestions(false)}
+                      disabled={saving}
+                      className="px-4 py-2 bg-rose-500 hover:bg-rose-600 rounded-lg disabled:opacity-50"
+                    >
+                      {saving ? 'Application...' : 'Appliquer les suggestions'}
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
