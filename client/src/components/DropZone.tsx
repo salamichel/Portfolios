@@ -96,7 +96,7 @@ export function DropZone({ themes, onUploadComplete, preselectedThemeId }: DropZ
           {isDragActive ? 'Déposez les images ici...' : 'Glissez-déposez vos images ici'}
         </p>
         <p className="text-gray-400 mt-2">ou cliquez pour sélectionner</p>
-        <p className="text-sm text-gray-500 mt-4">JPEG, PNG, GIF, WebP, TIFF • Max 200MB</p>
+        <p className="text-sm text-gray-500 mt-4">JPEG, PNG, GIF, WebP, TIFF • Max 500MB</p>
       </div>
 
       {/* Options */}
