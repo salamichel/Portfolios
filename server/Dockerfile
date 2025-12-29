@@ -32,4 +32,4 @@ RUN mkdir -p /app/data /app/uploads/thumbnails /app/uploads/medium /app/uploads/
 
 EXPOSE 3001
 
-CMD ["node", "dist/index.js"]
+CMD ["node", "dist/src/index.js"]
