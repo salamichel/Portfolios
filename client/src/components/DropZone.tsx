@@ -17,7 +17,7 @@ interface FileWithPreview extends File {
 export function DropZone({ themes, onUploadComplete, preselectedThemeId }: DropZoneProps) {
   const [files, setFiles] = useState<FileWithPreview[]>([]);
   const [selectedTheme, setSelectedTheme] = useState<string>(preselectedThemeId || '');
-  const [autoEnrich, setAutoEnrich] = useState(true);
+  const [autoEnrich, setAutoEnrich] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
 
@@ -37,7 +37,7 @@ export function DropZone({ themes, onUploadComplete, preselectedThemeId }: DropZ
       'image/webp': ['.webp'],
       'image/tiff': ['.tif', '.tiff']
     },
-    maxSize: 200 * 1024 * 1024
+    maxSize: 500 * 1024 * 1024
   });
 
   const removeFile = (index: number) => {
@@ -96,7 +96,7 @@ export function DropZone({ themes, onUploadComplete, preselectedThemeId }: DropZ
           {isDragActive ? 'Déposez les images ici...' : 'Glissez-déposez vos images ici'}
         </p>
         <p className="text-gray-400 mt-2">ou cliquez pour sélectionner</p>
-        <p className="text-sm text-gray-500 mt-4">JPEG, PNG, GIF, WebP, TIFF • Max 200MB</p>
+        <p className="text-sm text-gray-500 mt-4">JPEG, PNG, GIF, WebP, TIFF • Max 500MB</p>
       </div>
 
       {/* Options */}
