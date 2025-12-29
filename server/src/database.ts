@@ -282,6 +282,8 @@ export interface ApiCallDetail {
   duration_ms: number;
   error?: string;
   retry_attempt?: number;
+  prompt?: string; // The prompt sent to the AI
+  response?: string; // The raw response from the AI
 }
 
 export type ProcessingStatus = 'processing' | 'success' | 'failed';

@@ -906,7 +906,7 @@ async function callGeminiAPI(prompt: string, tracker?: ProcessingReportTracker |
             completion: usageMetadata?.candidatesTokenCount || 0,
             total: usageMetadata?.totalTokenCount || 0
           };
-          tracker.trackApiCall(tokens, callDuration, retryAttempt);
+          tracker.trackApiCall(tokens, callDuration, retryAttempt, prompt, text);
         }
 
         return text;
@@ -918,7 +918,8 @@ async function callGeminiAPI(prompt: string, tracker?: ProcessingReportTracker |
           tracker.trackApiError(
             error instanceof Error ? error.message : String(error),
             callDuration,
-            retryAttempt
+            retryAttempt,
+            prompt
           );
         }
 
