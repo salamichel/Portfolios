@@ -273,7 +273,7 @@ router.post('/:id/enrich', async (req, res) => {
   }
 });
 
-// Batch enrich multiple images with Gemini
+// Batch enrich multiple images with Gemini (parallel processing by chunks of 20)
 router.post('/batch-enrich', async (req, res) => {
   try {
     if (!process.env.GEMINI_API_KEY) {
@@ -286,6 +286,7 @@ router.post('/batch-enrich', async (req, res) => {
       return res.status(400).json({ error: 'image_ids array is required' });
     }
 
+    const BATCH_SIZE = 20;
     const results = {
       total: image_ids.length,
       successful: 0,
@@ -293,13 +294,12 @@ router.post('/batch-enrich', async (req, res) => {
       errors: [] as Array<{ id: string; error: string }>
     };
 
-    for (const imageId of image_ids) {
+    // Helper function to process a single image
+    const processImage = async (imageId: string): Promise<{ success: boolean; error?: string }> => {
       try {
         const image = imageDb.getById(imageId);
         if (!image) {
-          results.failed++;
-          results.errors.push({ id: imageId, error: 'Image not found' });
-          continue;
+          return { success: false, error: 'Image not found' };
         }
 
         // Use WebP version for Gemini
@@ -315,12 +315,34 @@ router.post('/batch-enrich', async (req, res) => {
           ai_enriched: true
         });
 
-        results.successful++;
+        return { success: true };
       } catch (error) {
-        results.failed++;
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        results.errors.push({ id: imageId, error: errorMessage });
         console.error(`Failed to enrich image ${imageId}:`, error);
+        return { success: false, error: errorMessage };
+      }
+    };
+
+    // Process images in parallel batches of BATCH_SIZE
+    for (let i = 0; i < image_ids.length; i += BATCH_SIZE) {
+      const batch = image_ids.slice(i, i + BATCH_SIZE);
+      console.log(`Processing batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(image_ids.length / BATCH_SIZE)} (${batch.length} images)`);
+
+      const batchResults = await Promise.all(
+        batch.map(async (imageId) => {
+          const result = await processImage(imageId);
+          return { imageId, ...result };
+        })
+      );
+
+      // Aggregate results
+      for (const result of batchResults) {
+        if (result.success) {
+          results.successful++;
+        } else {
+          results.failed++;
+          results.errors.push({ id: result.imageId, error: result.error || 'Unknown error' });
+        }
       }
     }
 
