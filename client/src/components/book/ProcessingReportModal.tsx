@@ -345,7 +345,7 @@ export function ProcessingReportModal({ bookId, isOpen, onClose }: ProcessingRep
                                 {call.prompt && (
                                   <div>
                                     <h5 className="text-xs font-semibold text-gray-700 mb-1">Prompt envoyé à l'IA:</h5>
-                                    <pre className="text-xs bg-gray-100 p-3 rounded overflow-x-auto max-h-60 overflow-y-auto">
+                                    <pre className="text-xs text-gray-900 bg-white border border-gray-300 p-3 rounded overflow-x-auto max-h-60 overflow-y-auto font-mono whitespace-pre-wrap">
                                       {call.prompt}
                                     </pre>
                                   </div>
@@ -355,7 +355,7 @@ export function ProcessingReportModal({ bookId, isOpen, onClose }: ProcessingRep
                                 {call.response && (
                                   <div>
                                     <h5 className="text-xs font-semibold text-gray-700 mb-1">Réponse brute de l'IA:</h5>
-                                    <pre className="text-xs bg-gray-100 p-3 rounded overflow-x-auto max-h-60 overflow-y-auto">
+                                    <pre className="text-xs text-gray-900 bg-white border border-gray-300 p-3 rounded overflow-x-auto max-h-60 overflow-y-auto font-mono whitespace-pre-wrap">
                                       {call.response}
                                     </pre>
                                   </div>
