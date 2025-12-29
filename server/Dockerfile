@@ -24,11 +24,11 @@ RUN apk add --no-cache python3 make g++
 COPY package*.json ./
 RUN npm ci --omit=dev
 
-# Copy built files
+# Copy built files (includes compiled scripts)
 COPY --from=builder /app/dist ./dist
 
 # Create directories for data and uploads
-RUN mkdir -p /app/data /app/uploads/thumbnails
+RUN mkdir -p /app/data /app/uploads/thumbnails /app/uploads/medium /app/uploads/optimized
 
 EXPOSE 3001
 
