@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import {
   ArrowLeft, Plus, Trash2, Wand2, ChevronLeft, ChevronRight,
-  LayoutGrid, BookOpen, Presentation, Type, Settings, Loader2
+  LayoutGrid, BookOpen, Presentation, Type, Settings, Loader2, Activity
 } from 'lucide-react';
 import { booksApi, templatesApi, themesApi } from '../api/client';
 import type { Book, BookPage, PageTemplate, Theme, LayoutSuggestion, Image, SlotAnnotation, TextSlotData } from '../types';
@@ -14,6 +14,7 @@ import { AnnotationEditor } from '../components/book/AnnotationEditor';
 import { TextSlotEditor } from '../components/book/TextSlotEditor';
 import { BookSlideshow } from '../components/book/BookSlideshow';
 import { BookInfoEditor } from '../components/book/BookInfoEditor';
+import { ProcessingReportModal } from '../components/book/ProcessingReportModal';
 
 export function BookEditor() {
   const { id } = useParams<{ id: string }>();
@@ -49,6 +50,9 @@ export function BookEditor() {
 
   // Book info editor
   const [showBookInfoEditor, setShowBookInfoEditor] = useState(false);
+
+  // Processing reports
+  const [showProcessingReports, setShowProcessingReports] = useState(false);
 
   // AI suggestions
   const [showAISuggestions, setShowAISuggestions] = useState(false);
@@ -402,6 +406,13 @@ export function BookEditor() {
               title="Modifier les infos du book"
             >
               <Settings className="w-5 h-5 text-gray-400" />
+            </button>
+            <button
+              onClick={() => setShowProcessingReports(true)}
+              className="p-2 hover:bg-gray-800 rounded-lg transition-colors"
+              title="Rapports de traitement IA"
+            >
+              <Activity className="w-5 h-5 text-gray-400" />
             </button>
           </div>
 
@@ -776,6 +787,15 @@ export function BookEditor() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Processing Reports Modal */}
+      {showProcessingReports && id && (
+        <ProcessingReportModal
+          bookId={id}
+          isOpen={showProcessingReports}
+          onClose={() => setShowProcessingReports(false)}
+        />
       )}
 
       {/* Saving indicator */}

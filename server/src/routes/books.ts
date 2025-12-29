@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { v4 as uuidv4 } from 'uuid';
-import { bookDb, bookPageDb, imageDb, templateDb } from '../database.js';
+import { bookDb, bookPageDb, imageDb, templateDb, processingReportDb } from '../database.js';
 import { suggestBookLayout } from '../services/bookLayoutAI.js';
 
 const router = Router();
@@ -187,6 +187,7 @@ router.put('/:bookId/pages/reorder', (req, res) => {
 router.post('/:bookId/suggest-layout', async (req, res) => {
   try {
     const { image_ids, use_cache = true } = req.body;
+    const bookId = req.params.bookId;
 
     if (!Array.isArray(image_ids) || image_ids.length === 0) {
       return res.status(400).json({ error: 'image_ids array is required' });
@@ -198,7 +199,10 @@ router.post('/:bookId/suggest-layout', async (req, res) => {
     }
 
     const templates = templateDb.getAll();
-    const suggestions = await suggestBookLayout(images, templates, { useCache: use_cache });
+    const suggestions = await suggestBookLayout(images, templates, {
+      useCache: use_cache,
+      bookId
+    });
 
     res.json(suggestions);
   } catch (error) {
@@ -236,6 +240,70 @@ router.post('/:bookId/apply-suggestions', (req, res) => {
     res.status(201).json(createdPages);
   } catch (error) {
     res.status(500).json({ error: 'Failed to apply suggestions' });
+  }
+});
+
+// === Processing Reports ===
+
+// Get all processing reports for a book
+router.get('/:bookId/reports', (req, res) => {
+  try {
+    const bookId = req.params.bookId;
+    const book = bookDb.getById(bookId);
+
+    if (!book) {
+      return res.status(404).json({ error: 'Book not found' });
+    }
+
+    const reports = processingReportDb.getAll(bookId);
+    res.json(reports);
+  } catch (error) {
+    console.error('Failed to get processing reports:', error);
+    res.status(500).json({ error: 'Failed to get processing reports' });
+  }
+});
+
+// Get latest processing report for a book
+router.get('/:bookId/reports/latest', (req, res) => {
+  try {
+    const bookId = req.params.bookId;
+    const book = bookDb.getById(bookId);
+
+    if (!book) {
+      return res.status(404).json({ error: 'Book not found' });
+    }
+
+    const report = processingReportDb.getLatestByBook(bookId);
+    if (!report) {
+      return res.status(404).json({ error: 'No reports found for this book' });
+    }
+
+    res.json(report);
+  } catch (error) {
+    console.error('Failed to get latest processing report:', error);
+    res.status(500).json({ error: 'Failed to get latest processing report' });
+  }
+});
+
+// Get specific processing report by ID
+router.get('/:bookId/reports/:reportId', (req, res) => {
+  try {
+    const { bookId, reportId } = req.params;
+    const book = bookDb.getById(bookId);
+
+    if (!book) {
+      return res.status(404).json({ error: 'Book not found' });
+    }
+
+    const report = processingReportDb.getById(reportId);
+    if (!report || report.book_id !== bookId) {
+      return res.status(404).json({ error: 'Report not found' });
+    }
+
+    res.json(report);
+  } catch (error) {
+    console.error('Failed to get processing report:', error);
+    res.status(500).json({ error: 'Failed to get processing report' });
   }
 });
 
