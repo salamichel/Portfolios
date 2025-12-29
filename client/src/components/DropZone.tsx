@@ -37,7 +37,7 @@ export function DropZone({ themes, onUploadComplete, preselectedThemeId }: DropZ
       'image/webp': ['.webp'],
       'image/tiff': ['.tif', '.tiff']
     },
-    maxSize: 200 * 1024 * 1024
+    maxSize: 500 * 1024 * 1024
   });
 
   const removeFile = (index: number) => {
