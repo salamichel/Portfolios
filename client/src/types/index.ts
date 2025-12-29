@@ -68,6 +68,8 @@ export interface PageTemplate {
   updated_at: string;
 }
 
+export type BookStatus = 'draft' | 'in_progress' | 'pending_review' | 'published';
+
 export interface Book {
   id: string;
   name: string;
@@ -76,6 +78,7 @@ export interface Book {
   page_format: string;
   tags: string | null;
   mood: string | null;
+  status: BookStatus;
   created_at: string;
   updated_at: string;
   page_count?: number;

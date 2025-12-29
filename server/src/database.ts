@@ -68,6 +68,7 @@ db.exec(`
     page_format TEXT DEFAULT 'A4',
     tags TEXT,
     mood TEXT,
+    status TEXT DEFAULT 'draft',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (cover_image_id) REFERENCES images(id) ON DELETE SET NULL
@@ -118,6 +119,13 @@ try {
 // Migration: Add category column to page_templates if it doesn't exist
 try {
   db.exec(`ALTER TABLE page_templates ADD COLUMN category TEXT DEFAULT 'standard'`);
+} catch {
+  // Column already exists, ignore error
+}
+
+// Migration: Add status column to books if it doesn't exist
+try {
+  db.exec(`ALTER TABLE books ADD COLUMN status TEXT DEFAULT 'draft'`);
 } catch {
   // Column already exists, ignore error
 }
@@ -179,6 +187,8 @@ export interface PageTemplate {
   updated_at: string;
 }
 
+export type BookStatus = 'draft' | 'in_progress' | 'pending_review' | 'published';
+
 export interface Book {
   id: string;
   name: string;
@@ -187,6 +197,7 @@ export interface Book {
   page_format: string;
   tags: string | null;
   mood: string | null;
+  status: BookStatus;
   created_at: string;
   updated_at: string;
   page_count?: number;
@@ -881,9 +892,9 @@ export const bookDb = {
 
   create(book: Omit<Book, 'created_at' | 'updated_at' | 'page_count'>): Book {
     db.prepare(`
-      INSERT INTO books (id, name, description, cover_image_id, page_format, tags, mood)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(book.id, book.name, book.description, book.cover_image_id, book.page_format, book.tags, book.mood);
+      INSERT INTO books (id, name, description, cover_image_id, page_format, tags, mood, status)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(book.id, book.name, book.description, book.cover_image_id, book.page_format, book.tags, book.mood, book.status);
     return this.getById(book.id)!;
   },
 
@@ -897,6 +908,7 @@ export const bookDb = {
     if (data.page_format !== undefined) { fields.push('page_format = ?'); values.push(data.page_format); }
     if (data.tags !== undefined) { fields.push('tags = ?'); values.push(data.tags); }
     if (data.mood !== undefined) { fields.push('mood = ?'); values.push(data.mood); }
+    if (data.status !== undefined) { fields.push('status = ?'); values.push(data.status); }
 
     if (fields.length === 0) return this.getById(id);
 

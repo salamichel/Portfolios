@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { X, Image as ImageIcon, Check } from 'lucide-react';
 import { booksApi, getThumbnailUrl } from '../../api/client';
-import type { Book, Image, BookPage } from '../../types';
+import type { Book, Image, BookPage, BookStatus } from '../../types';
 import TagMoodSelector from './TagMoodSelector';
+import { BookStatusEditor } from './BookStatusEditor';
 
 interface BookInfoEditorProps {
   book: Book;
@@ -14,6 +15,7 @@ interface BookInfoEditorProps {
 export function BookInfoEditor({ book, pages, onSave, onClose }: BookInfoEditorProps) {
   const [name, setName] = useState(book.name);
   const [description, setDescription] = useState(book.description || '');
+  const [status, setStatus] = useState<BookStatus>(book.status);
   const [selectedTags, setSelectedTags] = useState<string[]>(() => {
     if (book.tags) {
       try {
@@ -70,7 +72,8 @@ export function BookInfoEditor({ book, pages, onSave, onClose }: BookInfoEditorP
         description: description.trim() || null,
         tags: selectedTags.length > 0 ? JSON.stringify(selectedTags) : null,
         mood: selectedMoods.length > 0 ? JSON.stringify(selectedMoods) : null,
-        cover_image_id: coverImageId
+        cover_image_id: coverImageId,
+        status
       });
       onSave(updatedBook);
       onClose();
@@ -226,6 +229,12 @@ export function BookInfoEditor({ book, pages, onSave, onClose }: BookInfoEditorP
             selectedMoods={selectedMoods}
             onTagsChange={setSelectedTags}
             onMoodsChange={setSelectedMoods}
+          />
+
+          {/* Status */}
+          <BookStatusEditor
+            status={status}
+            onChange={setStatus}
           />
         </div>
 
