@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { X, Clock, CheckCircle, XCircle, RefreshCw, TrendingUp, Activity } from 'lucide-react';
 
 interface ApiCallDetail {
