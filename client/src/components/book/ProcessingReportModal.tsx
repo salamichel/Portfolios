@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, Clock, CheckCircle, XCircle, RefreshCw, TrendingUp, Activity } from 'lucide-react';
+import { X, Clock, CheckCircle, XCircle, RefreshCw, TrendingUp, Activity, ChevronDown, ChevronRight } from 'lucide-react';
 
 interface ApiCallDetail {
   timestamp: string;
@@ -12,6 +12,8 @@ interface ApiCallDetail {
   duration_ms: number;
   error?: string;
   retry_attempt?: number;
+  prompt?: string;
+  response?: string;
 }
 
 interface ProcessingReport {
@@ -46,6 +48,7 @@ export function ProcessingReportModal({ bookId, isOpen, onClose }: ProcessingRep
   const [selectedReport, setSelectedReport] = useState<ProcessingReport | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [expandedCalls, setExpandedCalls] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     if (isOpen && bookId) {
@@ -114,6 +117,16 @@ export function ProcessingReportModal({ bookId, isOpen, onClose }: ProcessingRep
       default:
         return 'bg-gray-100 text-gray-800';
     }
+  };
+
+  const toggleCallExpansion = (index: number) => {
+    const newExpanded = new Set(expandedCalls);
+    if (newExpanded.has(index)) {
+      newExpanded.delete(index);
+    } else {
+      newExpanded.add(index);
+    }
+    setExpandedCalls(newExpanded);
   };
 
   if (!isOpen) return null;
@@ -283,37 +296,75 @@ export function ProcessingReportModal({ bookId, isOpen, onClose }: ProcessingRep
                   <div className="bg-gray-50 p-4 rounded-lg">
                     <h4 className="font-semibold mb-3">Détails des appels API</h4>
                     <div className="space-y-2">
-                      {selectedReport.api_calls_detail.map((call, index) => (
-                        <div
-                          key={index}
-                          className={`p-3 rounded border-l-4 ${
-                            call.success
-                              ? 'bg-white border-green-500'
-                              : 'bg-red-50 border-red-500'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-sm font-medium">
-                              Appel #{index + 1}
-                              {call.retry_attempt && ` (Tentative ${call.retry_attempt})`}
-                            </span>
-                            <span className={`text-xs font-medium ${call.success ? 'text-green-600' : 'text-red-600'}`}>
-                              {call.success ? 'Succès' : 'Échec'}
-                            </span>
-                          </div>
-                          <div className="grid grid-cols-2 gap-2 text-xs text-gray-600">
-                            <div>Durée: {formatDuration(call.duration_ms)}</div>
-                            {call.tokens && (
-                              <div>Tokens: {call.tokens.total.toLocaleString()}</div>
+                      {selectedReport.api_calls_detail.map((call, index) => {
+                        const isExpanded = expandedCalls.has(index);
+                        return (
+                          <div
+                            key={index}
+                            className={`rounded border-l-4 ${
+                              call.success
+                                ? 'bg-white border-green-500'
+                                : 'bg-red-50 border-red-500'
+                            }`}
+                          >
+                            <div className="p-3">
+                              <div className="flex items-center justify-between mb-1">
+                                <button
+                                  onClick={() => toggleCallExpansion(index)}
+                                  className="flex items-center gap-2 text-sm font-medium hover:text-blue-600 transition-colors"
+                                >
+                                  {isExpanded ? (
+                                    <ChevronDown className="w-4 h-4" />
+                                  ) : (
+                                    <ChevronRight className="w-4 h-4" />
+                                  )}
+                                  Appel #{index + 1}
+                                  {call.retry_attempt && ` (Tentative ${call.retry_attempt})`}
+                                </button>
+                                <span className={`text-xs font-medium ${call.success ? 'text-green-600' : 'text-red-600'}`}>
+                                  {call.success ? 'Succès' : 'Échec'}
+                                </span>
+                              </div>
+                              <div className="grid grid-cols-2 gap-2 text-xs text-gray-600">
+                                <div>Durée: {formatDuration(call.duration_ms)}</div>
+                                {call.tokens && (
+                                  <div>Tokens: {call.tokens.total.toLocaleString()}</div>
+                                )}
+                              </div>
+                              {call.error && (
+                                <div className="mt-2 text-xs text-red-600 bg-red-100 p-2 rounded">
+                                  {call.error}
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Expanded Content */}
+                            {isExpanded && (
+                              <div className="border-t border-gray-200 p-3 space-y-3">
+                                {/* Prompt */}
+                                {call.prompt && (
+                                  <div>
+                                    <h5 className="text-xs font-semibold text-gray-700 mb-1">Prompt envoyé à l'IA:</h5>
+                                    <pre className="text-xs bg-gray-100 p-3 rounded overflow-x-auto max-h-60 overflow-y-auto">
+                                      {call.prompt}
+                                    </pre>
+                                  </div>
+                                )}
+
+                                {/* Response */}
+                                {call.response && (
+                                  <div>
+                                    <h5 className="text-xs font-semibold text-gray-700 mb-1">Réponse brute de l'IA:</h5>
+                                    <pre className="text-xs bg-gray-100 p-3 rounded overflow-x-auto max-h-60 overflow-y-auto">
+                                      {call.response}
+                                    </pre>
+                                  </div>
+                                )}
+                              </div>
                             )}
                           </div>
-                          {call.error && (
-                            <div className="mt-2 text-xs text-red-600 bg-red-100 p-2 rounded">
-                              {call.error}
-                            </div>
-                          )}
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 )}
