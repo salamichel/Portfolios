@@ -647,7 +647,43 @@ function parseAIResponse(text: string): any {
 }
 
 /**
- * Validates AI response schema and data integrity
+ * Extract and normalize UUID from potentially malformed image_id
+ * Handles cases where AI concatenates parts of UUIDs incorrectly
+ */
+function normalizeImageId(imageId: string, validImageIds: Set<string>): string | null {
+  // If the ID is already valid, return it as-is
+  if (validImageIds.has(imageId)) {
+    return imageId;
+  }
+
+  // Try to extract a valid UUID pattern (8-4-4-4-12 format)
+  // UUID regex: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+  const uuidRegex = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
+  const matches = imageId.match(uuidRegex);
+
+  if (matches) {
+    // Try each match to see if it's valid
+    for (const match of matches) {
+      if (validImageIds.has(match)) {
+        console.log(`Corrected malformed image_id "${imageId}" to "${match}"`);
+        return match;
+      }
+    }
+  }
+
+  // Try partial matching - check if any valid ID contains this string or vice versa
+  for (const validId of validImageIds) {
+    if (imageId.includes(validId) || validId.includes(imageId)) {
+      console.log(`Fuzzy matched image_id "${imageId}" to "${validId}"`);
+      return validId;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Validates and normalizes AI response schema and data integrity
  */
 function validateAIResponse(
   parsed: any,
@@ -671,7 +707,7 @@ function validateAIResponse(
   const validImageIds = new Set(images.map(img => img.id));
   const validTemplateIds = new Set(templates.map(t => t.id));
 
-  // Validate each suggestion
+  // Validate and normalize each suggestion
   parsed.suggestions.forEach((suggestion: any, index: number) => {
     const prefix = `Suggestion ${index + 1}`;
 
@@ -682,15 +718,23 @@ function validateAIResponse(
       errors.push(`${prefix}: Invalid template_id "${suggestion.template_id}"`);
     }
 
-    // Check image_ids
+    // Check and normalize image_ids
     if (!Array.isArray(suggestion.image_ids)) {
       errors.push(`${prefix}: Missing or invalid image_ids array`);
     } else {
+      // Normalize image IDs in place
+      const normalizedIds: string[] = [];
       suggestion.image_ids.forEach((imageId: string, imgIndex: number) => {
-        if (!validImageIds.has(imageId)) {
+        const normalized = normalizeImageId(imageId, validImageIds);
+        if (!normalized) {
           errors.push(`${prefix}: Invalid image_id "${imageId}" at index ${imgIndex}`);
+        } else {
+          normalizedIds.push(normalized);
         }
       });
+
+      // Replace with normalized IDs
+      suggestion.image_ids = normalizedIds;
 
       // Check if image count matches template slots
       if (suggestion.template_id && validTemplateIds.has(suggestion.template_id)) {
@@ -705,7 +749,7 @@ function validateAIResponse(
     }
 
     // Validate text_content if present
-    if (suggestion.text_content && typeof suggestion.text_content !== 'object') {
+    if (suggestion.text_content !== undefined && suggestion.text_content !== null && typeof suggestion.text_content !== 'object') {
       errors.push(`${prefix}: text_content must be an object`);
     }
   });
