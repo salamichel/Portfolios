@@ -186,7 +186,7 @@ router.put('/:bookId/pages/reorder', (req, res) => {
 // Get AI layout suggestions for selected images
 router.post('/:bookId/suggest-layout', async (req, res) => {
   try {
-    const { image_ids } = req.body;
+    const { image_ids, use_cache = true } = req.body;
 
     if (!Array.isArray(image_ids) || image_ids.length === 0) {
       return res.status(400).json({ error: 'image_ids array is required' });
@@ -198,7 +198,7 @@ router.post('/:bookId/suggest-layout', async (req, res) => {
     }
 
     const templates = templateDb.getAll();
-    const suggestions = await suggestBookLayout(images, templates);
+    const suggestions = await suggestBookLayout(images, templates, { useCache: use_cache });
 
     res.json(suggestions);
   } catch (error) {
