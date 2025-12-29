@@ -217,39 +217,39 @@ export function ProcessingReportModal({ bookId, isOpen, onClose }: ProcessingRep
 
                 {/* Overview Stats */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div className="bg-gray-50 p-4 rounded-lg">
-                    <div className="text-sm text-gray-600 mb-1">Images</div>
-                    <div className="text-2xl font-bold text-gray-900">{selectedReport.image_count}</div>
+                  <div className="bg-gradient-to-br from-gray-50 to-gray-100 p-4 rounded-lg border border-gray-200 shadow-sm">
+                    <div className="text-sm font-medium text-gray-600 mb-1">Images</div>
+                    <div className="text-3xl font-bold text-gray-900">{selectedReport.image_count}</div>
                   </div>
-                  <div className="bg-blue-50 p-4 rounded-lg">
-                    <div className="text-sm text-blue-600 mb-1">Appels API</div>
-                    <div className="text-2xl font-bold text-blue-900">{selectedReport.total_api_calls}</div>
+                  <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-4 rounded-lg border border-blue-200 shadow-sm">
+                    <div className="text-sm font-medium text-blue-700 mb-1">Appels API</div>
+                    <div className="text-3xl font-bold text-blue-900">{selectedReport.total_api_calls}</div>
                   </div>
-                  <div className="bg-green-50 p-4 rounded-lg">
-                    <div className="text-sm text-green-600 mb-1">Tokens</div>
-                    <div className="text-2xl font-bold text-green-900">{selectedReport.total_tokens.toLocaleString()}</div>
+                  <div className="bg-gradient-to-br from-green-50 to-green-100 p-4 rounded-lg border border-green-200 shadow-sm">
+                    <div className="text-sm font-medium text-green-700 mb-1">Tokens</div>
+                    <div className="text-3xl font-bold text-green-900">{selectedReport.total_tokens.toLocaleString()}</div>
                   </div>
-                  <div className="bg-purple-50 p-4 rounded-lg">
-                    <div className="text-sm text-purple-600 mb-1">Durée</div>
-                    <div className="text-2xl font-bold text-purple-900">{formatDuration(selectedReport.execution_time_ms)}</div>
+                  <div className="bg-gradient-to-br from-purple-50 to-purple-100 p-4 rounded-lg border border-purple-200 shadow-sm">
+                    <div className="text-sm font-medium text-purple-700 mb-1">Durée</div>
+                    <div className="text-3xl font-bold text-purple-900">{formatDuration(selectedReport.execution_time_ms)}</div>
                   </div>
                 </div>
 
                 {/* Timeline */}
-                <div className="bg-gray-50 p-4 rounded-lg">
-                  <h4 className="font-semibold mb-3 flex items-center gap-2">
-                    <Clock className="w-4 h-4" />
+                <div className="bg-white border border-gray-200 p-4 rounded-lg shadow-sm">
+                  <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                    <Clock className="w-5 h-5 text-blue-600" />
                     Timeline
                   </h4>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Début:</span>
-                      <span className="font-medium">{formatDate(selectedReport.started_at)}</span>
+                  <div className="space-y-3 text-sm">
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-600 font-medium">Début:</span>
+                      <span className="font-semibold text-gray-900">{formatDate(selectedReport.started_at)}</span>
                     </div>
                     {selectedReport.completed_at && (
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Fin:</span>
-                        <span className="font-medium">{formatDate(selectedReport.completed_at)}</span>
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-600 font-medium">Fin:</span>
+                        <span className="font-semibold text-gray-900">{formatDate(selectedReport.completed_at)}</span>
                       </div>
                     )}
                   </div>
@@ -257,27 +257,27 @@ export function ProcessingReportModal({ bookId, isOpen, onClose }: ProcessingRep
 
                 {/* API Calls Stats */}
                 {!selectedReport.cache_hit && selectedReport.total_api_calls > 0 && (
-                  <div className="bg-gray-50 p-4 rounded-lg">
-                    <h4 className="font-semibold mb-3 flex items-center gap-2">
-                      <TrendingUp className="w-4 h-4" />
+                  <div className="bg-white border border-gray-200 p-4 rounded-lg shadow-sm">
+                    <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                      <TrendingUp className="w-5 h-5 text-green-600" />
                       Statistiques API
                     </h4>
                     <div className="grid grid-cols-2 gap-4 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Succès:</span>
-                        <span className="font-medium text-green-600">{selectedReport.successful_api_calls}</span>
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-600 font-medium">Succès:</span>
+                        <span className="font-bold text-green-600 text-base">{selectedReport.successful_api_calls}</span>
                       </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Échecs:</span>
-                        <span className="font-medium text-red-600">{selectedReport.failed_api_calls}</span>
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-600 font-medium">Échecs:</span>
+                        <span className="font-bold text-red-600 text-base">{selectedReport.failed_api_calls}</span>
                       </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Tokens prompt:</span>
-                        <span className="font-medium">{selectedReport.prompt_tokens.toLocaleString()}</span>
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-600 font-medium">Tokens prompt:</span>
+                        <span className="font-semibold text-gray-900">{selectedReport.prompt_tokens.toLocaleString()}</span>
                       </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Tokens réponse:</span>
-                        <span className="font-medium">{selectedReport.completion_tokens.toLocaleString()}</span>
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-600 font-medium">Tokens réponse:</span>
+                        <span className="font-semibold text-gray-900">{selectedReport.completion_tokens.toLocaleString()}</span>
                       </div>
                     </div>
                   </div>
@@ -293,9 +293,15 @@ export function ProcessingReportModal({ bookId, isOpen, onClose }: ProcessingRep
 
                 {/* API Calls Detail */}
                 {selectedReport.api_calls_detail && selectedReport.api_calls_detail.length > 0 && (
-                  <div className="bg-gray-50 p-4 rounded-lg">
-                    <h4 className="font-semibold mb-3">Détails des appels API</h4>
-                    <div className="space-y-2">
+                  <div className="bg-white border-2 border-blue-200 p-5 rounded-lg shadow-sm">
+                    <h4 className="font-bold text-lg text-gray-900 mb-4 flex items-center gap-2">
+                      <Activity className="w-5 h-5 text-blue-600" />
+                      Détails des appels API
+                      <span className="text-sm font-normal text-gray-500">
+                        (Cliquez pour voir le prompt et la réponse)
+                      </span>
+                    </h4>
+                    <div className="space-y-3">
                       {selectedReport.api_calls_detail.map((call, index) => {
                         const isExpanded = expandedCalls.has(index);
                         return (
@@ -340,26 +346,38 @@ export function ProcessingReportModal({ bookId, isOpen, onClose }: ProcessingRep
 
                             {/* Expanded Content */}
                             {isExpanded && (
-                              <div className="border-t border-gray-200 p-3 space-y-3">
+                              <div className="border-t border-gray-200 bg-gray-50 p-4 space-y-4">
                                 {/* Prompt */}
-                                {call.prompt && (
-                                  <div>
-                                    <h5 className="text-xs font-semibold text-gray-700 mb-1">Prompt envoyé à l'IA:</h5>
-                                    <pre className="text-xs text-gray-900 bg-white border border-gray-300 p-3 rounded overflow-x-auto max-h-60 overflow-y-auto font-mono whitespace-pre-wrap">
+                                <div>
+                                  <h5 className="text-sm font-semibold text-gray-900 mb-2 flex items-center gap-2">
+                                    📤 Prompt envoyé à l'IA
+                                  </h5>
+                                  {call.prompt ? (
+                                    <pre className="text-sm text-gray-900 bg-white border-2 border-blue-200 p-4 rounded-lg overflow-x-auto max-h-96 overflow-y-auto font-mono whitespace-pre-wrap shadow-sm">
                                       {call.prompt}
                                     </pre>
-                                  </div>
-                                )}
+                                  ) : (
+                                    <div className="text-sm text-gray-500 italic bg-yellow-50 border border-yellow-200 p-3 rounded">
+                                      ⚠️ Prompt non disponible (rapport créé avant l'activation du traçage)
+                                    </div>
+                                  )}
+                                </div>
 
                                 {/* Response */}
-                                {call.response && (
-                                  <div>
-                                    <h5 className="text-xs font-semibold text-gray-700 mb-1">Réponse brute de l'IA:</h5>
-                                    <pre className="text-xs text-gray-900 bg-white border border-gray-300 p-3 rounded overflow-x-auto max-h-60 overflow-y-auto font-mono whitespace-pre-wrap">
+                                <div>
+                                  <h5 className="text-sm font-semibold text-gray-900 mb-2 flex items-center gap-2">
+                                    📥 Réponse brute de l'IA
+                                  </h5>
+                                  {call.response ? (
+                                    <pre className="text-sm text-gray-900 bg-white border-2 border-green-200 p-4 rounded-lg overflow-x-auto max-h-96 overflow-y-auto font-mono whitespace-pre-wrap shadow-sm">
                                       {call.response}
                                     </pre>
-                                  </div>
-                                )}
+                                  ) : (
+                                    <div className="text-sm text-gray-500 italic bg-yellow-50 border border-yellow-200 p-3 rounded">
+                                      ⚠️ Réponse non disponible (rapport créé avant l'activation du traçage)
+                                    </div>
+                                  )}
+                                </div>
                               </div>
                             )}
                           </div>
