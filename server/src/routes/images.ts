@@ -170,10 +170,10 @@ router.post('/upload', upload.array('images', 50), async (req, res) => {
         .webp({ quality: 80 })
         .toFile(path.join(thumbnailsDir, thumbnailFilename));
 
-      // Generate medium WebP for detail view (1024px)
+      // Generate medium WebP for detail view (1600px)
       const mediumFilename = `medium_${baseName}.webp`;
       await sharp(imagePath)
-        .resize(1024, 1024, { fit: 'inside', withoutEnlargement: true })
+        .resize(1600, 1600, { fit: 'inside', withoutEnlargement: true })
         .webp({ quality: 85 })
         .toFile(path.join(mediumDir, mediumFilename));
 
