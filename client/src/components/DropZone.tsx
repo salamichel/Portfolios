@@ -17,7 +17,7 @@ interface FileWithPreview extends File {
 export function DropZone({ themes, onUploadComplete, preselectedThemeId }: DropZoneProps) {
   const [files, setFiles] = useState<FileWithPreview[]>([]);
   const [selectedTheme, setSelectedTheme] = useState<string>(preselectedThemeId || '');
-  const [autoEnrich, setAutoEnrich] = useState(true);
+  const [autoEnrich, setAutoEnrich] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
 
