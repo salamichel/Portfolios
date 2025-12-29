@@ -41,7 +41,7 @@ const HEAVY_FORMATS = ['image/tiff'];
 const upload = multer({
   storage,
   limits: {
-    fileSize: 200 * 1024 * 1024 // 200MB limit (for large TIFF files)
+    fileSize: 500 * 1024 * 1024 // 500MB limit (for large TIFF files)
   },
   fileFilter: (req, file, cb) => {
     const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/tiff'];
@@ -273,7 +273,7 @@ router.post('/:id/enrich', async (req, res) => {
   }
 });
 
-// Batch enrich multiple images with Gemini (parallel processing by chunks of 20)
+// Batch enrich multiple images with Gemini (parallel processing by chunks of 10)
 router.post('/batch-enrich', async (req, res) => {
   try {
     if (!process.env.GEMINI_API_KEY) {
@@ -286,7 +286,7 @@ router.post('/batch-enrich', async (req, res) => {
       return res.status(400).json({ error: 'image_ids array is required' });
     }
 
-    const BATCH_SIZE = 20;
+    const BATCH_SIZE = 10;
     const results = {
       total: image_ids.length,
       successful: 0,
