@@ -684,23 +684,25 @@ function normalizeImageId(imageId: string, validImageIds: Set<string>): string |
 
 /**
  * Validates and normalizes AI response schema and data integrity
+ * Returns valid suggestions and filters out invalid ones
  */
 function validateAIResponse(
   parsed: any,
   images: Image[],
   templates: PageTemplate[]
-): { isValid: boolean; errors: string[] } {
+): { isValid: boolean; errors: string[]; validSuggestions: any[] } {
   const errors: string[] = [];
+  const validSuggestions: any[] = [];
 
   // Check basic structure
   if (!parsed || typeof parsed !== 'object') {
     errors.push('Response is not an object');
-    return { isValid: false, errors };
+    return { isValid: false, errors, validSuggestions: [] };
   }
 
   if (!Array.isArray(parsed.suggestions)) {
     errors.push('Missing or invalid "suggestions" array');
-    return { isValid: false, errors };
+    return { isValid: false, errors, validSuggestions: [] };
   }
 
   // Build lookup maps for fast validation
@@ -710,24 +712,25 @@ function validateAIResponse(
   // Validate and normalize each suggestion
   parsed.suggestions.forEach((suggestion: any, index: number) => {
     const prefix = `Suggestion ${index + 1}`;
+    const suggestionErrors: string[] = [];
 
     // Check template_id
     if (!suggestion.template_id) {
-      errors.push(`${prefix}: Missing template_id`);
+      suggestionErrors.push(`${prefix}: Missing template_id`);
     } else if (!validTemplateIds.has(suggestion.template_id)) {
-      errors.push(`${prefix}: Invalid template_id "${suggestion.template_id}"`);
+      suggestionErrors.push(`${prefix}: Invalid template_id "${suggestion.template_id}"`);
     }
 
     // Check and normalize image_ids
     if (!Array.isArray(suggestion.image_ids)) {
-      errors.push(`${prefix}: Missing or invalid image_ids array`);
+      suggestionErrors.push(`${prefix}: Missing or invalid image_ids array`);
     } else {
       // Normalize image IDs in place
       const normalizedIds: string[] = [];
       suggestion.image_ids.forEach((imageId: string, imgIndex: number) => {
         const normalized = normalizeImageId(imageId, validImageIds);
         if (!normalized) {
-          errors.push(`${prefix}: Invalid image_id "${imageId}" at index ${imgIndex}`);
+          suggestionErrors.push(`${prefix}: Invalid image_id "${imageId}" at index ${imgIndex}`);
         } else {
           normalizedIds.push(normalized);
         }
@@ -742,7 +745,7 @@ function validateAIResponse(
         if (template) {
           const imageSlotCount = template.layout.slots.filter(s => s.type === 'image').length;
           if (suggestion.image_ids.length !== imageSlotCount) {
-            errors.push(`${prefix}: Template "${template.name}" requires ${imageSlotCount} images but got ${suggestion.image_ids.length}`);
+            suggestionErrors.push(`${prefix}: Template "${template.name}" requires ${imageSlotCount} images but got ${suggestion.image_ids.length}`);
           }
         }
       }
@@ -750,13 +753,23 @@ function validateAIResponse(
 
     // Validate text_content if present
     if (suggestion.text_content !== undefined && suggestion.text_content !== null && typeof suggestion.text_content !== 'object') {
-      errors.push(`${prefix}: text_content must be an object`);
+      suggestionErrors.push(`${prefix}: text_content must be an object`);
+    }
+
+    // If this suggestion has no errors, add it to valid suggestions
+    if (suggestionErrors.length === 0) {
+      validSuggestions.push(suggestion);
+    } else {
+      // Log this suggestion's errors but don't fail completely
+      console.warn(`Skipping invalid suggestion ${index + 1}:`, suggestionErrors.join('; '));
+      errors.push(...suggestionErrors);
     }
   });
 
   return {
-    isValid: errors.length === 0,
-    errors
+    isValid: validSuggestions.length > 0,
+    errors,
+    validSuggestions
   };
 }
 
@@ -1021,18 +1034,23 @@ async function getAISuggestions(
   // Extract and parse JSON from response
   const parsed = parseAIResponse(text);
 
-  // Validate AI response
+  // Validate AI response and get valid suggestions
   const validation = validateAIResponse(parsed, images, templates);
   if (!validation.isValid) {
-    console.error('AI response validation failed:', validation.errors);
-    throw new Error(`Invalid AI response: ${validation.errors.join('; ')}`);
+    console.error('AI response validation failed - no valid suggestions found:', validation.errors);
+    throw new Error(`Invalid AI response: no valid suggestions found`);
+  }
+
+  // Log if some suggestions were skipped
+  if (validation.errors.length > 0) {
+    console.warn(`AI response had ${validation.errors.length} validation errors, using ${validation.validSuggestions.length} valid suggestions`);
   }
 
   // Convert AI suggestions to our format
   const suggestions: LayoutSuggestion[] = [];
   let position = 0;
 
-  for (const suggestion of parsed.suggestions) {
+  for (const suggestion of validation.validSuggestions) {
     const template = templates.find(t => t.id === suggestion.template_id);
     if (!template) {
       console.warn(`Skipping suggestion with invalid template_id: ${suggestion.template_id}`);
