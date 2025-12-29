@@ -1,5 +1,5 @@
 import { randomUUID } from 'crypto';
-import { processingReportDb, BookProcessingReport, ApiCallDetail, ProcessingStatus } from '../database';
+import { processingReportDb, BookProcessingReport, ApiCallDetail, ProcessingStatus } from '../database.js';
 
 /**
  * Service to track book processing reports for AI layout generation
