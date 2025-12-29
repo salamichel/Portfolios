@@ -1,5 +1,6 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import type { Image, PageTemplate, TemplateLayout, PageData, LayoutSlot, SlotAnnotation } from '../database.js';
+import { ProcessingReportTracker } from './processingReportService.js';
 
 // Use dedicated book API key, fallback to general Gemini key for backward compatibility
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_BOOK_API_KEY || process.env.GEMINI_API_KEY || '');
@@ -481,15 +482,22 @@ function selectBestTemplate(
 export async function suggestBookLayout(
   images: Image[],
   templates: PageTemplate[],
-  options: { useCache?: boolean; previousPages?: LayoutSuggestion[] } = {}
+  options: { useCache?: boolean; previousPages?: LayoutSuggestion[]; bookId?: string; tracker?: ProcessingReportTracker } = {}
 ): Promise<BookLayoutSuggestions> {
-  const { useCache = true, previousPages } = options;
+  const { useCache = true, previousPages, bookId, tracker: existingTracker } = options;
+
+  // Create tracker if bookId is provided and no tracker exists
+  const tracker = existingTracker || (bookId ? new ProcessingReportTracker(bookId, images.length) : null);
 
   // Check cache first if enabled
   if (useCache) {
     const imageIds = images.map(img => img.id);
     const cached = getCachedSuggestions(imageIds);
     if (cached) {
+      // Mark as cache hit if tracker is available
+      if (tracker) {
+        tracker.markCacheHit();
+      }
       return cached;
     }
   }
@@ -500,7 +508,7 @@ export async function suggestBookLayout(
   // Try AI-based suggestions if API key is available
   if (process.env.GEMINI_API_KEY) {
     try {
-      const suggestions = await getAISuggestions(images, analyses, templates, { previousPages });
+      const suggestions = await getAISuggestions(images, analyses, templates, { previousPages, tracker });
 
       // Cache the results
       if (useCache) {
@@ -508,9 +516,19 @@ export async function suggestBookLayout(
         cacheSuggestions(imageIds, suggestions);
       }
 
+      // Mark as complete if tracker is available
+      if (tracker) {
+        tracker.complete();
+      }
+
       return suggestions;
     } catch (error) {
       console.error('AI suggestion failed, falling back to heuristics:', error);
+
+      // Mark as failed if tracker is available
+      if (tracker) {
+        tracker.fail(error instanceof Error ? error.message : String(error));
+      }
     }
   }
 
@@ -541,7 +559,7 @@ function delay(ms: number): Promise<void> {
  * Helper function to retry a function with exponential backoff
  */
 async function retryWithBackoff<T>(
-  fn: () => Promise<T>,
+  fn: (retryAttempt?: number) => Promise<T>,
   options: {
     maxRetries?: number;
     baseDelayMs?: number;
@@ -554,7 +572,7 @@ async function retryWithBackoff<T>(
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
-      return await fn();
+      return await fn(attempt > 0 ? attempt : undefined);
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
 
@@ -807,17 +825,48 @@ IMPORTANT: Pour "text_content", utilise les slot_id des zones de texte du templa
 /**
  * Call Gemini API with retry and timeout
  */
-async function callGeminiAPI(prompt: string): Promise<string> {
+async function callGeminiAPI(prompt: string, tracker?: ProcessingReportTracker | null): Promise<string> {
   const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-lite' });
 
   return await retryWithBackoff(
-    async () => {
-      const result = await withTimeout(
-        model.generateContent(prompt),
-        AI_REQUEST_TIMEOUT_MS
-      );
-      const response = await result.response;
-      return response.text();
+    async (retryAttempt?: number) => {
+      const callStartTime = Date.now();
+      try {
+        const result = await withTimeout(
+          model.generateContent(prompt),
+          AI_REQUEST_TIMEOUT_MS
+        );
+        const response = await result.response;
+        const text = response.text();
+        const callDuration = Date.now() - callStartTime;
+
+        // Track successful API call
+        if (tracker) {
+          // Get usage metadata if available
+          const usageMetadata = response.usageMetadata;
+          const tokens = {
+            prompt: usageMetadata?.promptTokenCount || 0,
+            completion: usageMetadata?.candidatesTokenCount || 0,
+            total: usageMetadata?.totalTokenCount || 0
+          };
+          tracker.trackApiCall(tokens, callDuration, retryAttempt);
+        }
+
+        return text;
+      } catch (error) {
+        const callDuration = Date.now() - callStartTime;
+
+        // Track failed API call
+        if (tracker) {
+          tracker.trackApiError(
+            error instanceof Error ? error.message : String(error),
+            callDuration,
+            retryAttempt
+          );
+        }
+
+        throw error;
+      }
     },
     {
       onRetry: (error, attempt) => {
@@ -911,17 +960,19 @@ async function getAISuggestions(
   images: Image[],
   analyses: ImageAnalysis[],
   templates: PageTemplate[],
-  options: { previousPages?: LayoutSuggestion[] } = {}
+  options: { previousPages?: LayoutSuggestion[]; tracker?: ProcessingReportTracker | null } = {}
 ): Promise<BookLayoutSuggestions> {
+  const { previousPages, tracker } = options;
+
   // Prepare data for AI
   const imageDescriptions = prepareImageDescriptions(images, analyses);
   const templateDescriptions = prepareTemplateDescriptions(templates);
 
   // Build prompt with optional context
-  const prompt = buildAIPrompt(imageDescriptions, templateDescriptions, options);
+  const prompt = buildAIPrompt(imageDescriptions, templateDescriptions, { previousPages });
 
   // Call Gemini API
-  const text = await callGeminiAPI(prompt);
+  const text = await callGeminiAPI(prompt, tracker);
 
   // Extract and parse JSON from response
   const parsed = parseAIResponse(text);
