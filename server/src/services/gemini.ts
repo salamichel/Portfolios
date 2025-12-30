@@ -199,14 +199,23 @@ export interface CleanupSuggestions {
   moods: SimilarityGroup[];
 }
 
-export async function analyzeSimilarMetadata(
-  tags: Array<{ tag: string; count: number }>,
-  moods: Array<{ mood: string; count: number }>
-): Promise<CleanupSuggestions> {
-  try {
-    const model = genAI.getGenerativeModel({ model: 'gemini-3-flash-preview' });
+// Maximum number of tags to send per API call to avoid token limits
+const TAG_BATCH_SIZE = 150;
 
-    const prompt = `Analysez ces tags et ambiances (moods) et identifiez les groupes qui ont le même sens ou sont des variantes (synonymes, pluriel/singulier, langues différentes, fautes d'orthographe, etc.).
+/**
+ * Analyze a single batch of tags for similarities
+ */
+async function analyzeTagBatch(
+  tags: Array<{ tag: string; count: number }>,
+  moods: Array<{ mood: string; count: number }>,
+  batchIndex: number,
+  totalBatches: number
+): Promise<CleanupSuggestions> {
+  const model = genAI.getGenerativeModel({ model: 'gemini-3-flash-preview' });
+
+  const batchInfo = totalBatches > 1 ? ` (lot ${batchIndex + 1}/${totalBatches})` : '';
+
+  const prompt = `Analysez ces tags et ambiances (moods) et identifiez les groupes qui ont le même sens ou sont des variantes (synonymes, pluriel/singulier, langues différentes, fautes d'orthographe, etc.)${batchInfo}.
 
 TAGS:
 ${tags.map(t => `- "${t.tag}" (utilisé ${t.count} fois)`).join('\n')}
@@ -241,23 +250,72 @@ Notes importantes :
 - Ne groupez que les termes vraiment similaires/synonymes
 - Préférez le terme le plus utilisé comme canonical
 - Si un terme est unique, ne le retournez pas
-- Soyez intelligent pour détecter : pluriel/singulier, accents, casse, langues, synonymes`;
+- Soyez intelligent pour détecter : pluriel/singulier, accents, casse, langues, synonymes
+- IMPORTANT: Analysez TOUS les tags fournis et retournez TOUTES les similarités trouvées`;
 
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    const text = response.text();
+  const result = await model.generateContent(prompt);
+  const response = await result.response;
+  const text = response.text();
 
-    // Extract JSON from response
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error('Could not parse Gemini response');
+  // Extract JSON from response
+  const jsonMatch = text.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) {
+    throw new Error('Could not parse Gemini response');
+  }
+
+  const parsed = JSON.parse(jsonMatch[0]);
+
+  return {
+    tags: Array.isArray(parsed.tags) ? parsed.tags : [],
+    moods: Array.isArray(parsed.moods) ? parsed.moods : []
+  };
+}
+
+/**
+ * Analyze tags and moods for similarities, processing in batches if needed
+ * to avoid token limits with large tag collections
+ */
+export async function analyzeSimilarMetadata(
+  tags: Array<{ tag: string; count: number }>,
+  moods: Array<{ mood: string; count: number }>
+): Promise<CleanupSuggestions> {
+  try {
+    // If we have few enough tags, process in a single call
+    if (tags.length <= TAG_BATCH_SIZE) {
+      console.log(`[Gemini] Analyzing ${tags.length} tags and ${moods.length} moods in single batch`);
+      return await analyzeTagBatch(tags, moods, 0, 1);
     }
 
-    const parsed = JSON.parse(jsonMatch[0]);
+    // Process tags in batches
+    const totalBatches = Math.ceil(tags.length / TAG_BATCH_SIZE);
+    console.log(`[Gemini] Analyzing ${tags.length} tags in ${totalBatches} batches of ${TAG_BATCH_SIZE}`);
+
+    const allTagSuggestions: SimilarityGroup[] = [];
+    const allMoodSuggestions: SimilarityGroup[] = [];
+
+    for (let i = 0; i < totalBatches; i++) {
+      const startIdx = i * TAG_BATCH_SIZE;
+      const endIdx = Math.min(startIdx + TAG_BATCH_SIZE, tags.length);
+      const tagBatch = tags.slice(startIdx, endIdx);
+
+      // Only include moods in the first batch to avoid duplicates
+      const moodBatch = i === 0 ? moods : [];
+
+      console.log(`[Gemini] Processing batch ${i + 1}/${totalBatches}: tags ${startIdx + 1}-${endIdx}`);
+
+      const batchResult = await analyzeTagBatch(tagBatch, moodBatch, i, totalBatches);
+
+      allTagSuggestions.push(...batchResult.tags);
+      if (i === 0) {
+        allMoodSuggestions.push(...batchResult.moods);
+      }
+    }
+
+    console.log(`[Gemini] Completed analysis: ${allTagSuggestions.length} tag suggestions, ${allMoodSuggestions.length} mood suggestions`);
 
     return {
-      tags: Array.isArray(parsed.tags) ? parsed.tags : [],
-      moods: Array.isArray(parsed.moods) ? parsed.moods : []
+      tags: allTagSuggestions,
+      moods: allMoodSuggestions
     };
   } catch (error) {
     console.error('Gemini similarity analysis error:', error);
