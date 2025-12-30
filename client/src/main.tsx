@@ -7,6 +7,7 @@ import { AdminThemes } from './pages/AdminThemes.tsx'
 import { BookList } from './pages/BookList.tsx'
 import { BookEditor } from './pages/BookEditor.tsx'
 import { TemplateEditor } from './pages/TemplateEditor.tsx'
+import { CleanupAdmin } from './pages/CleanupAdmin.tsx'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -14,6 +15,7 @@ createRoot(document.getElementById('root')!).render(
       <Routes>
         <Route path="/" element={<App />} />
         <Route path="/admin/themes" element={<AdminThemes />} />
+        <Route path="/admin/cleanup" element={<CleanupAdmin />} />
         <Route path="/books" element={<BookList />} />
         <Route path="/books/:id" element={<BookEditor />} />
         <Route path="/templates" element={<TemplateEditor />} />

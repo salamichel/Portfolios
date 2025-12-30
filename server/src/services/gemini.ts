@@ -187,3 +187,80 @@ function getMimeType(filePath: string): string {
   };
   return mimeTypes[ext] || 'image/jpeg';
 }
+
+export interface SimilarityGroup {
+  canonical: string;
+  similar: string[];
+  reason: string;
+}
+
+export interface CleanupSuggestions {
+  tags: SimilarityGroup[];
+  moods: SimilarityGroup[];
+}
+
+export async function analyzeSimilarMetadata(
+  tags: Array<{ tag: string; count: number }>,
+  moods: Array<{ mood: string; count: number }>
+): Promise<CleanupSuggestions> {
+  try {
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-lite' });
+
+    const prompt = `Analysez ces tags et ambiances (moods) et identifiez les groupes qui ont le même sens ou sont des variantes (synonymes, pluriel/singulier, langues différentes, fautes d'orthographe, etc.).
+
+TAGS:
+${tags.map(t => `- "${t.tag}" (utilisé ${t.count} fois)`).join('\n')}
+
+MOODS:
+${moods.map(m => `- "${m.mood}" (utilisé ${m.count} fois)`).join('\n')}
+
+Pour chaque groupe de termes similaires :
+1. Choisissez le terme CANONICAL (le plus utilisé ou le plus clair)
+2. Listez les termes SIMILAIRES qui doivent être fusionnés avec lui
+3. Expliquez brièvement pourquoi ils sont similaires
+
+Répondez UNIQUEMENT en JSON, sans texte avant ou après :
+{
+  "tags": [
+    {
+      "canonical": "terme principal",
+      "similar": ["variante1", "variante2"],
+      "reason": "raison de la similarité"
+    }
+  ],
+  "moods": [
+    {
+      "canonical": "ambiance principale",
+      "similar": ["variante1", "variante2"],
+      "reason": "raison de la similarité"
+    }
+  ]
+}
+
+Notes importantes :
+- Ne groupez que les termes vraiment similaires/synonymes
+- Préférez le terme le plus utilisé comme canonical
+- Si un terme est unique, ne le retournez pas
+- Soyez intelligent pour détecter : pluriel/singulier, accents, casse, langues, synonymes`;
+
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const text = response.text();
+
+    // Extract JSON from response
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      throw new Error('Could not parse Gemini response');
+    }
+
+    const parsed = JSON.parse(jsonMatch[0]);
+
+    return {
+      tags: Array.isArray(parsed.tags) ? parsed.tags : [],
+      moods: Array.isArray(parsed.moods) ? parsed.moods : []
+    };
+  } catch (error) {
+    console.error('Gemini similarity analysis error:', error);
+    throw error;
+  }
+}

@@ -641,6 +641,72 @@ export const imageDb = {
       WHERE ai_enriched = 0 OR ai_enriched IS NULL
     `).get() as { count: number };
     return result.count;
+  },
+
+  replaceTag(oldTag: string, newTag: string): number {
+    const images = db.prepare('SELECT id, tags FROM images WHERE tags IS NOT NULL').all() as { id: string; tags: string }[];
+    let updatedCount = 0;
+
+    const updateStmt = db.prepare('UPDATE images SET tags = ? WHERE id = ?');
+
+    for (const img of images) {
+      try {
+        const tags = JSON.parse(img.tags);
+        if (Array.isArray(tags)) {
+          const newTags = tags.map(tag => tag === oldTag ? newTag : tag);
+          if (JSON.stringify(tags) !== JSON.stringify(newTags)) {
+            updateStmt.run(JSON.stringify(newTags), img.id);
+            updatedCount++;
+          }
+        }
+      } catch {
+        // Skip invalid entries
+      }
+    }
+
+    return updatedCount;
+  },
+
+  replaceMood(oldMood: string, newMood: string): number {
+    const result = db.prepare(`
+      UPDATE images
+      SET mood = ?
+      WHERE mood = ?
+    `).run(newMood, oldMood);
+    return result.changes;
+  },
+
+  deleteTag(tag: string): number {
+    const images = db.prepare('SELECT id, tags FROM images WHERE tags IS NOT NULL').all() as { id: string; tags: string }[];
+    let updatedCount = 0;
+
+    const updateStmt = db.prepare('UPDATE images SET tags = ? WHERE id = ?');
+
+    for (const img of images) {
+      try {
+        const tags = JSON.parse(img.tags);
+        if (Array.isArray(tags)) {
+          const newTags = tags.filter(t => t !== tag);
+          if (tags.length !== newTags.length) {
+            updateStmt.run(JSON.stringify(newTags), img.id);
+            updatedCount++;
+          }
+        }
+      } catch {
+        // Skip invalid entries
+      }
+    }
+
+    return updatedCount;
+  },
+
+  deleteMood(mood: string): number {
+    const result = db.prepare(`
+      UPDATE images
+      SET mood = NULL
+      WHERE mood = ?
+    `).run(mood);
+    return result.changes;
   }
 };
 

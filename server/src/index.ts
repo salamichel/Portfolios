@@ -7,6 +7,7 @@ import themesRouter from './routes/themes.js';
 import imagesRouter from './routes/images.js';
 import booksRouter from './routes/books.js';
 import templatesRouter from './routes/templates.js';
+import cleanupRouter from './routes/cleanup.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -41,6 +42,7 @@ app.use('/api/themes', themesRouter);
 app.use('/api/images', imagesRouter);
 app.use('/api/books', booksRouter);
 app.use('/api/templates', templatesRouter);
+app.use('/api/cleanup', cleanupRouter);
 
 // Health check
 app.get('/api/health', (req, res) => {
