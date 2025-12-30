@@ -22,7 +22,7 @@ export interface ImageAnalysisBatchResult {
 
 export async function analyzeImage(imagePath: string): Promise<ImageAnalysis> {
   try {
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-lite' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-3-flash' });
 
     const imageBuffer = fs.readFileSync(imagePath);
     const base64Image = imageBuffer.toString('base64');
@@ -86,12 +86,12 @@ export async function analyzeImagesBatch(imagePaths: string[]): Promise<ImageAna
       return { analyses: [] };
     }
 
-    // Gemini supports up to 10 images per request
-    if (imagePaths.length > 10) {
-      throw new Error('Cannot analyze more than 10 images in a single batch');
+    // Gemini supports up to 20 images per request
+    if (imagePaths.length > 20) {
+      throw new Error('Cannot analyze more than 20 images in a single batch');
     }
 
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-lite' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-3-flash' });
 
     // Prepare all images
     const imageData = imagePaths.map(imagePath => {
@@ -204,7 +204,7 @@ export async function analyzeSimilarMetadata(
   moods: Array<{ mood: string; count: number }>
 ): Promise<CleanupSuggestions> {
   try {
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-lite' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-3-flash' });
 
     const prompt = `Analysez ces tags et ambiances (moods) et identifiez les groupes qui ont le même sens ou sont des variantes (synonymes, pluriel/singulier, langues différentes, fautes d'orthographe, etc.).
 

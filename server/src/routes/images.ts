@@ -292,7 +292,7 @@ router.post('/batch-enrich', async (req, res) => {
     tracker = new ImageEnrichmentReportTracker(image_ids.length);
     console.log(`[Batch Enrich] Started tracking report: ${tracker.getReportId()}`);
 
-    const BATCH_SIZE = 10; // Gemini supports up to 10 images per request
+    const BATCH_SIZE = 20; // Gemini supports up to 20 images per request
     const results = {
       total: image_ids.length,
       successful: 0,
