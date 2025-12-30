@@ -87,9 +87,10 @@ export function BookEditor() {
   }, [loadBook]);
 
   const currentPage = pages[currentPageIndex];
+  const isLocked = book?.status === 'published';
 
   const handleAddPage = async () => {
-    if (!id) return;
+    if (!id || isLocked) return;
     try {
       const defaultTemplate = templates.find(t => t.id === 'tpl-full-bleed-2') || templates[0];
       const newPage = await booksApi.addPage(id, {
@@ -104,7 +105,7 @@ export function BookEditor() {
   };
 
   const handleDeletePage = async () => {
-    if (!id || !currentPage) return;
+    if (!id || !currentPage || isLocked) return;
     if (!confirm('Supprimer cette page ?')) return;
 
     try {
@@ -120,7 +121,7 @@ export function BookEditor() {
   };
 
   const handleBulkDelete = async () => {
-    if (!id || selectedPageIds.size === 0) return;
+    if (!id || selectedPageIds.size === 0 || isLocked) return;
 
     try {
       setSaving(true);
@@ -140,7 +141,7 @@ export function BookEditor() {
   };
 
   const handleTemplateChange = async (templateId: string) => {
-    if (!id || !currentPage) return;
+    if (!id || !currentPage || isLocked) return;
     try {
       setSaving(true);
       const updated = await booksApi.updatePage(id, currentPage.id, {
@@ -157,7 +158,7 @@ export function BookEditor() {
   };
 
   const handleImageAssign = async (imageId: string) => {
-    if (!id || !currentPage || !selectedSlotId) return;
+    if (!id || !currentPage || !selectedSlotId || isLocked) return;
 
     try {
       setSaving(true);
@@ -184,7 +185,7 @@ export function BookEditor() {
   };
 
   const handleRemoveImage = async (slotId: string) => {
-    if (!id || !currentPage) return;
+    if (!id || !currentPage || isLocked) return;
 
     try {
       setSaving(true);
@@ -277,7 +278,7 @@ export function BookEditor() {
   };
 
   const handleReorderPages = async (newOrder: string[]) => {
-    if (!id) return;
+    if (!id || isLocked) return;
     try {
       const reordered = await booksApi.reorderPages(id, newOrder);
       setPages(reordered);
@@ -293,7 +294,7 @@ export function BookEditor() {
   };
 
   const handleSaveAnnotation = async (annotation: SlotAnnotation) => {
-    if (!id || !currentPage || !annotationSlotId) return;
+    if (!id || !currentPage || !annotationSlotId || isLocked) return;
 
     try {
       setSaving(true);
@@ -330,7 +331,7 @@ export function BookEditor() {
   };
 
   const handleSaveTextSlot = async (textSlot: TextSlotData) => {
-    if (!id || !currentPage || !editingTextSlotId) return;
+    if (!id || !currentPage || !editingTextSlotId || isLocked) return;
 
     try {
       setSaving(true);
@@ -462,7 +463,9 @@ export function BookEditor() {
 
             <button
               onClick={handleAddPage}
-              className="flex items-center gap-2 px-3 py-2 bg-rose-500 hover:bg-rose-600 rounded-lg transition-colors"
+              disabled={isLocked}
+              className="flex items-center gap-2 px-3 py-2 bg-rose-500 hover:bg-rose-600 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              title={isLocked ? "Le livre est publié et verrouillé" : "Ajouter une nouvelle page"}
             >
               <Plus className="w-4 h-4" />
               <span className="hidden sm:inline">Nouvelle page</span>
@@ -520,6 +523,7 @@ export function BookEditor() {
                 onRemoveImage={handleRemoveImage}
                 onEditAnnotation={handleEditAnnotation}
                 onEditTextSlot={handleEditTextSlot}
+                disabled={isLocked}
               />
             ) : (
               <div className="text-center">
@@ -541,7 +545,9 @@ export function BookEditor() {
             <div className="flex items-center justify-center gap-4 py-4 border-t border-gray-800">
               <button
                 onClick={() => setShowTemplateSelector(true)}
-                className="flex items-center gap-2 px-3 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg"
+                disabled={isLocked}
+                className="flex items-center gap-2 px-3 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                title={isLocked ? "Le livre est publié et verrouillé" : "Changer le template"}
               >
                 <LayoutGrid className="w-4 h-4" />
                 Changer le template
@@ -549,7 +555,9 @@ export function BookEditor() {
 
               <button
                 onClick={handleDeletePage}
-                className="flex items-center gap-2 px-3 py-2 text-red-400 hover:bg-red-500/10 rounded-lg"
+                disabled={isLocked}
+                className="flex items-center gap-2 px-3 py-2 text-red-400 hover:bg-red-500/10 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                title={isLocked ? "Le livre est publié et verrouillé" : "Supprimer cette page"}
               >
                 <Trash2 className="w-4 h-4" />
                 Supprimer

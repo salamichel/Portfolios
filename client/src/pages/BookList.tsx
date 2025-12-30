@@ -4,6 +4,7 @@ import { Plus, BookOpen, Trash2, Edit2, ArrowLeft, Calendar, FileText, Layout } 
 import { booksApi, getThumbnailUrl } from '../api/client';
 import type { Book } from '../types';
 import TagMoodSelector from '../components/book/TagMoodSelector';
+import { BookStatusBadge } from '../components/book/BookStatusBadge';
 
 export function BookList() {
   const [books, setBooks] = useState<Book[]>([]);
@@ -200,6 +201,10 @@ export function BookList() {
                   {book.description && (
                     <p className="text-sm text-gray-400 mb-3 line-clamp-2">{book.description}</p>
                   )}
+
+                  <div className="mb-3">
+                    <BookStatusBadge status={book.status} />
+                  </div>
 
                   <div className="flex items-center gap-4 text-xs text-gray-500">
                     <span className="flex items-center gap-1">

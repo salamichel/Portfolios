@@ -11,9 +11,10 @@ interface DoublePageSpreadProps {
   onRemoveImage: (slotId: string) => void;
   onEditAnnotation: (slotId: string, image: Image) => void;
   onEditTextSlot: (slotId: string) => void;
+  disabled?: boolean;
 }
 
-export function DoublePageSpread({ page, template, onSlotClick, onRemoveImage, onEditAnnotation, onEditTextSlot }: DoublePageSpreadProps) {
+export function DoublePageSpread({ page, template, onSlotClick, onRemoveImage, onEditAnnotation, onEditTextSlot, disabled = false }: DoublePageSpreadProps) {
   const slots = template?.layout?.slots || [];
   const pageData = page.page_data;
   const images = page.images || [];
@@ -188,33 +189,44 @@ export function DoublePageSpread({ page, template, onSlotClick, onRemoveImage, o
           {renderAnnotation(slotData, image)}
 
           {/* Overlay actions on hover */}
-          <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 z-30">
-            <button
-              onClick={() => onEditAnnotation(slot.id, image)}
-              className={`p-2 rounded-lg backdrop-blur-sm ${
-                hasAnnotation
-                  ? 'bg-rose-500/70 hover:bg-rose-500/90'
-                  : 'bg-white/20 hover:bg-white/30'
-              }`}
-              title="Annoter l'image"
-            >
-              <Type className="w-5 h-5 text-white" />
-            </button>
-            <button
-              onClick={() => onSlotClick(slot.id)}
-              className="p-2 bg-white/20 hover:bg-white/30 rounded-lg backdrop-blur-sm"
-              title="Changer l'image"
-            >
-              <Plus className="w-5 h-5 text-white" />
-            </button>
-            <button
-              onClick={() => onRemoveImage(slot.id)}
-              className="p-2 bg-red-500/50 hover:bg-red-500/70 rounded-lg backdrop-blur-sm"
-              title="Supprimer l'image"
-            >
-              <X className="w-5 h-5 text-white" />
-            </button>
-          </div>
+          {!disabled && (
+            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 z-30">
+              <button
+                onClick={() => onEditAnnotation(slot.id, image)}
+                className={`p-2 rounded-lg backdrop-blur-sm ${
+                  hasAnnotation
+                    ? 'bg-rose-500/70 hover:bg-rose-500/90'
+                    : 'bg-white/20 hover:bg-white/30'
+                }`}
+                title="Annoter l'image"
+              >
+                <Type className="w-5 h-5 text-white" />
+              </button>
+              <button
+                onClick={() => onSlotClick(slot.id)}
+                className="p-2 bg-white/20 hover:bg-white/30 rounded-lg backdrop-blur-sm"
+                title="Changer l'image"
+              >
+                <Plus className="w-5 h-5 text-white" />
+              </button>
+              <button
+                onClick={() => onRemoveImage(slot.id)}
+                className="p-2 bg-red-500/50 hover:bg-red-500/70 rounded-lg backdrop-blur-sm"
+                title="Supprimer l'image"
+              >
+                <X className="w-5 h-5 text-white" />
+              </button>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    if (disabled) {
+      return (
+        <div className="w-full h-full border-2 border-dashed border-gray-300 flex flex-col items-center justify-center gap-2 text-gray-400">
+          <Plus className="w-8 h-8" />
+          <span className="text-sm">Slot vide</span>
         </div>
       );
     }
@@ -256,15 +268,26 @@ export function DoublePageSpread({ page, template, onSlotClick, onRemoveImage, o
           </div>
 
           {/* Edit overlay on hover */}
-          <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center z-30">
-            <button
-              onClick={() => onEditTextSlot(slot.id)}
-              className="p-3 bg-white/90 hover:bg-white rounded-lg shadow-lg"
-              title="Modifier le texte"
-            >
-              <Edit3 className="w-5 h-5 text-gray-700" />
-            </button>
-          </div>
+          {!disabled && (
+            <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center z-30">
+              <button
+                onClick={() => onEditTextSlot(slot.id)}
+                className="p-3 bg-white/90 hover:bg-white rounded-lg shadow-lg"
+                title="Modifier le texte"
+              >
+                <Edit3 className="w-5 h-5 text-gray-700" />
+              </button>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    if (disabled) {
+      return (
+        <div className="w-full h-full border-2 border-dashed border-gray-300 flex flex-col items-center justify-center gap-2 text-gray-400">
+          <Type className="w-8 h-8" />
+          <span className="text-sm">Zone de texte vide</span>
         </div>
       );
     }
