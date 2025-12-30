@@ -1,5 +1,5 @@
 import React from 'react';
-import { BookStatus } from '../../types';
+import type { BookStatus } from '../../types';
 import { BookStatusBadge } from './BookStatusBadge';
 
 interface BookStatusEditorProps {

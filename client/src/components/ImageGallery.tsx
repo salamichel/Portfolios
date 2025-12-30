@@ -279,6 +279,11 @@ export function ImageGallery({ themeId, themes, searchQuery, onImageUpdate }: Im
     }
   };
 
+  const handleTagClick = (tag: string) => {
+    setSelectedTag(tag);
+    closeLightbox();
+  };
+
   const toggleImageSelection = (imageId: string) => {
     setSelectedImages(prev => {
       const newSet = new Set(prev);
@@ -626,9 +631,13 @@ export function ImageGallery({ themeId, themes, searchQuery, onImageUpdate }: Im
                     </div>
                     <div className="flex flex-wrap gap-2">
                       {parseTags(selectedImage.tags).map((tag, i) => (
-                        <span key={i} className="px-2 py-1 bg-gray-800 rounded-full text-xs">
+                        <button
+                          key={i}
+                          onClick={() => handleTagClick(tag)}
+                          className="px-2 py-1 bg-gray-800 hover:bg-blue-500/30 hover:text-blue-400 rounded-full text-xs transition-colors cursor-pointer"
+                        >
                           {tag}
-                        </span>
+                        </button>
                       ))}
                     </div>
                   </div>
@@ -875,9 +884,13 @@ export function ImageGallery({ themeId, themes, searchQuery, onImageUpdate }: Im
                     </div>
                     <div className="flex flex-wrap gap-2">
                       {parseTags(selectedImage.tags).map((tag, i) => (
-                        <span key={i} className="px-2 py-1 bg-gray-800 rounded-full text-xs">
+                        <button
+                          key={i}
+                          onClick={() => handleTagClick(tag)}
+                          className="px-2 py-1 bg-gray-800 hover:bg-blue-500/30 hover:text-blue-400 rounded-full text-xs transition-colors cursor-pointer"
+                        >
                           {tag}
-                        </span>
+                        </button>
                       ))}
                     </div>
                   </div>
