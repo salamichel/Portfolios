@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Loader2, Sparkles, Trash2, X, ChevronLeft, ChevronRight, Tag, Pencil, Save, XCircle, Info, Smile, BookOpen, Check } from 'lucide-react';
 import { imagesApi, getMediumImageUrl, getThumbnailUrl } from '../api/client';
-import type { Image, Theme } from '../types';
+import type { Image, Theme, TagWithCount, MoodWithCount } from '../types';
 import { CreateBookFromPhotoModal } from './book/CreateBookFromPhotoModal';
 import { CreateBookFromPhotosModal } from './book/CreateBookFromPhotosModal';
 import { BatchEnrichButton } from './BatchEnrichButton';
@@ -33,8 +33,8 @@ export function ImageGallery({ themeId, themes, searchQuery, onImageUpdate }: Im
   const [showMobileDetails, setShowMobileDetails] = useState(false);
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [selectedMood, setSelectedMood] = useState<string | null>(null);
-  const [availableTags, setAvailableTags] = useState<string[]>([]);
-  const [availableMoods, setAvailableMoods] = useState<string[]>([]);
+  const [availableTags, setAvailableTags] = useState<TagWithCount[]>([]);
+  const [availableMoods, setAvailableMoods] = useState<MoodWithCount[]>([]);
   const [showCreateBookModal, setShowCreateBookModal] = useState(false);
   const [selectedImages, setSelectedImages] = useState<Set<string>>(new Set());
   const [showCreateBookFromPhotosModal, setShowCreateBookFromPhotosModal] = useState(false);
@@ -84,13 +84,13 @@ export function ImageGallery({ themeId, themes, searchQuery, onImageUpdate }: Im
     }
   }, [themeId, searchQuery, selectedTag, selectedMood, images.length, loading]);
 
-  // Load tags and moods
+  // Load tags and moods with counts
   useEffect(() => {
     const loadMetadata = async () => {
       try {
         const [tags, moods] = await Promise.all([
-          imagesApi.getAllTags(),
-          imagesApi.getAllMoods()
+          imagesApi.getTags(),
+          imagesApi.getMoods()
         ]);
         setAvailableTags(tags);
         setAvailableMoods(moods);
@@ -279,6 +279,11 @@ export function ImageGallery({ themeId, themes, searchQuery, onImageUpdate }: Im
     }
   };
 
+  const getTagCount = (tag: string): number => {
+    const tagData = availableTags.find(t => t.tag === tag);
+    return tagData?.count || 0;
+  };
+
   const handleTagClick = (tag: string) => {
     setSelectedTag(tag);
     closeLightbox();
@@ -370,8 +375,8 @@ export function ImageGallery({ themeId, themes, searchQuery, onImageUpdate }: Im
                 className="w-full bg-gray-900 border border-gray-700 rounded-lg pl-9 pr-4 py-2 text-white focus:outline-none focus:border-rose-500 appearance-none cursor-pointer"
               >
                 <option value="">Tous les tags</option>
-                {availableTags.map(tag => (
-                  <option key={tag} value={tag}>{tag}</option>
+                {availableTags.map(({ tag, count }) => (
+                  <option key={tag} value={tag}>{tag} ({count})</option>
                 ))}
               </select>
             </div>
@@ -388,8 +393,8 @@ export function ImageGallery({ themeId, themes, searchQuery, onImageUpdate }: Im
                 className="w-full bg-gray-900 border border-gray-700 rounded-lg pl-9 pr-4 py-2 text-white focus:outline-none focus:border-rose-500 appearance-none cursor-pointer"
               >
                 <option value="">Toutes les ambiances</option>
-                {availableMoods.map(mood => (
-                  <option key={mood} value={mood}>{mood}</option>
+                {availableMoods.map(({ mood, count }) => (
+                  <option key={mood} value={mood}>{mood} ({count})</option>
                 ))}
               </select>
             </div>
@@ -630,15 +635,23 @@ export function ImageGallery({ themeId, themes, searchQuery, onImageUpdate }: Im
                       Tags
                     </div>
                     <div className="flex flex-wrap gap-2">
-                      {parseTags(selectedImage.tags).map((tag, i) => (
-                        <button
-                          key={i}
-                          onClick={() => handleTagClick(tag)}
-                          className="px-2 py-1 bg-gray-800 hover:bg-blue-500/30 hover:text-blue-400 rounded-full text-xs transition-colors cursor-pointer"
-                        >
-                          {tag}
-                        </button>
-                      ))}
+                      {parseTags(selectedImage.tags).map((tag, i) => {
+                        const count = getTagCount(tag);
+                        return (
+                          <button
+                            key={i}
+                            onClick={() => handleTagClick(tag)}
+                            className="group relative px-3 py-1.5 bg-gradient-to-r from-blue-500/20 to-indigo-500/20 hover:from-blue-500/40 hover:to-indigo-500/40 border border-blue-500/30 hover:border-blue-400/50 rounded-full text-sm transition-all cursor-pointer shadow-sm hover:shadow-md"
+                          >
+                            <span className="text-blue-200 group-hover:text-blue-100 font-medium">{tag}</span>
+                            {count > 0 && (
+                              <span className="ml-2 px-1.5 py-0.5 bg-blue-600/60 text-blue-100 text-xs rounded-full font-semibold">
+                                {count}
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
                 )}
@@ -883,15 +896,23 @@ export function ImageGallery({ themeId, themes, searchQuery, onImageUpdate }: Im
                       Tags
                     </div>
                     <div className="flex flex-wrap gap-2">
-                      {parseTags(selectedImage.tags).map((tag, i) => (
-                        <button
-                          key={i}
-                          onClick={() => handleTagClick(tag)}
-                          className="px-2 py-1 bg-gray-800 hover:bg-blue-500/30 hover:text-blue-400 rounded-full text-xs transition-colors cursor-pointer"
-                        >
-                          {tag}
-                        </button>
-                      ))}
+                      {parseTags(selectedImage.tags).map((tag, i) => {
+                        const count = getTagCount(tag);
+                        return (
+                          <button
+                            key={i}
+                            onClick={() => handleTagClick(tag)}
+                            className="group relative px-3 py-1.5 bg-gradient-to-r from-blue-500/20 to-indigo-500/20 hover:from-blue-500/40 hover:to-indigo-500/40 border border-blue-500/30 hover:border-blue-400/50 rounded-full text-sm transition-all cursor-pointer shadow-sm hover:shadow-md"
+                          >
+                            <span className="text-blue-200 group-hover:text-blue-100 font-medium">{tag}</span>
+                            {count > 0 && (
+                              <span className="ml-2 px-1.5 py-0.5 bg-blue-600/60 text-blue-100 text-xs rounded-full font-semibold">
+                                {count}
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
                 )}
