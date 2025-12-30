@@ -147,3 +147,44 @@ export const booksApi = {
   applySuggestions: (bookId: string, suggestions: LayoutSuggestion[]) =>
     api.post<BookPage[]>(`/books/${bookId}/apply-suggestions`, { suggestions }).then(res => res.data)
 };
+
+// Cleanup API
+export interface SimilarityGroup {
+  canonical: string;
+  similar: string[];
+  reason: string;
+}
+
+export interface CleanupSuggestions {
+  tags: SimilarityGroup[];
+  moods: SimilarityGroup[];
+}
+
+export interface CleanupAnalysisResponse {
+  suggestions: CleanupSuggestions;
+  stats: {
+    totalTags: number;
+    totalMoods: number;
+    suggestedTagMerges: number;
+    suggestedMoodMerges: number;
+  };
+}
+
+export const cleanupApi = {
+  analyze: () => api.post<CleanupAnalysisResponse>('/cleanup/analyze').then(res => res.data),
+
+  mergeTag: (oldTag: string, newTag: string) =>
+    api.post<{ success: boolean; updatedImages: number; message: string }>('/cleanup/merge-tag', { oldTag, newTag }).then(res => res.data),
+
+  mergeMood: (oldMood: string, newMood: string) =>
+    api.post<{ success: boolean; updatedImages: number; message: string }>('/cleanup/merge-mood', { oldMood, newMood }).then(res => res.data),
+
+  deleteTag: (tag: string) =>
+    api.delete<{ success: boolean; updatedImages: number; message: string }>(`/cleanup/tag/${encodeURIComponent(tag)}`).then(res => res.data),
+
+  deleteMood: (mood: string) =>
+    api.delete<{ success: boolean; updatedImages: number; message: string }>(`/cleanup/mood/${encodeURIComponent(mood)}`).then(res => res.data),
+
+  applySuggestions: (tagMerges: SimilarityGroup[], moodMerges: SimilarityGroup[]) =>
+    api.post<{ success: boolean; results: any; message: string }>('/cleanup/apply-suggestions', { tagMerges, moodMerges }).then(res => res.data)
+};
