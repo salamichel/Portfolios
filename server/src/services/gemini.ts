@@ -66,6 +66,94 @@ Respond in JSON format exactly like this:
   }
 }
 
+/**
+ * Analyze multiple images in a single Gemini API call (up to 10 images)
+ * Much more efficient than calling analyzeImage() multiple times
+ */
+export async function analyzeImagesBatch(imagePaths: string[]): Promise<ImageAnalysis[]> {
+  try {
+    if (imagePaths.length === 0) {
+      return [];
+    }
+
+    // Gemini supports up to 10 images per request
+    if (imagePaths.length > 10) {
+      throw new Error('Cannot analyze more than 10 images in a single batch');
+    }
+
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-lite' });
+
+    // Prepare all images
+    const imageData = imagePaths.map(imagePath => {
+      const imageBuffer = fs.readFileSync(imagePath);
+      const base64Image = imageBuffer.toString('base64');
+      const mimeType = getMimeType(imagePath);
+      return { mimeType, data: base64Image };
+    });
+
+    const prompt = `Analysez chacune des ${imagePaths.length} images artistiques/photographies fournies et pour CHAQUE image, fournissez :
+1. Un titre créatif et évocateur (max 10 mots)
+2. Une description artistique qui capture l'ambiance, la composition et les éléments artistiques (2 à 3 phrases)
+3. Des mots-clés pertinents pour la catégorisation (5 à 10 tags)
+4. L'ambiance/atmosphère générale (un ou deux mots comme « serein », « dramatique », « mélancolique », etc.)
+
+IMPORTANT : Retournez un tableau JSON avec exactement ${imagePaths.length} éléments, dans le MÊME ORDRE que les images fournies.
+
+Respond in JSON format exactly like this:
+[
+  {
+    "title": "...",
+    "description": "...",
+    "tags": ["tag1", "tag2", ...],
+    "mood": "..."
+  },
+  {
+    "title": "...",
+    "description": "...",
+    "tags": ["tag1", "tag2", ...],
+    "mood": "..."
+  }
+]`;
+
+    // Build the content array: prompt first, then all images
+    const contentParts = [
+      { text: prompt },
+      ...imageData.map(img => ({
+        inlineData: {
+          mimeType: img.mimeType,
+          data: img.data
+        }
+      }))
+    ];
+
+    const result = await model.generateContent(contentParts);
+    const response = await result.response;
+    const text = response.text();
+
+    // Extract JSON array from response
+    const jsonMatch = text.match(/\[[\s\S]*\]/);
+    if (!jsonMatch) {
+      throw new Error('Could not parse Gemini batch response');
+    }
+
+    const parsed = JSON.parse(jsonMatch[0]);
+
+    if (!Array.isArray(parsed) || parsed.length !== imagePaths.length) {
+      throw new Error(`Expected ${imagePaths.length} analyses, got ${Array.isArray(parsed) ? parsed.length : 'non-array'}`);
+    }
+
+    return parsed.map(item => ({
+      title: item.title || 'Untitled',
+      description: item.description || '',
+      tags: Array.isArray(item.tags) ? item.tags : [],
+      mood: item.mood || 'undefined'
+    }));
+  } catch (error) {
+    console.error('Gemini batch analysis error:', error);
+    throw error;
+  }
+}
+
 function getMimeType(filePath: string): string {
   const ext = path.extname(filePath).toLowerCase();
   const mimeTypes: Record<string, string> = {
