@@ -883,7 +883,7 @@ IMPORTANT: Pour "text_content", utilise les slot_id des zones de texte du templa
  * Call Gemini API with retry and timeout
  */
 async function callGeminiAPI(prompt: string, tracker?: ProcessingReportTracker | null): Promise<string> {
-  const model = genAI.getGenerativeModel({ model: 'gemini-3-flash' });
+  const model = genAI.getGenerativeModel({ model: 'gemini-3-flash-preview' });
 
   return await retryWithBackoff(
     async (retryAttempt?: number) => {

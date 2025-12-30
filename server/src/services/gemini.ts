@@ -22,7 +22,7 @@ export interface ImageAnalysisBatchResult {
 
 export async function analyzeImage(imagePath: string): Promise<ImageAnalysis> {
   try {
-    const model = genAI.getGenerativeModel({ model: 'gemini-3-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-3-flash-preview' });
 
     const imageBuffer = fs.readFileSync(imagePath);
     const base64Image = imageBuffer.toString('base64');
@@ -91,7 +91,7 @@ export async function analyzeImagesBatch(imagePaths: string[]): Promise<ImageAna
       throw new Error('Cannot analyze more than 20 images in a single batch');
     }
 
-    const model = genAI.getGenerativeModel({ model: 'gemini-3-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-3-flash-preview' });
 
     // Prepare all images
     const imageData = imagePaths.map(imagePath => {
@@ -204,7 +204,7 @@ export async function analyzeSimilarMetadata(
   moods: Array<{ mood: string; count: number }>
 ): Promise<CleanupSuggestions> {
   try {
-    const model = genAI.getGenerativeModel({ model: 'gemini-3-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-3-flash-preview' });
 
     const prompt = `Analysez ces tags et ambiances (moods) et identifiez les groupes qui ont le même sens ou sont des variantes (synonymes, pluriel/singulier, langues différentes, fautes d'orthographe, etc.).
 
