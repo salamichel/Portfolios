@@ -132,24 +132,34 @@ export function DropZone({ themes, onUploadComplete, preselectedThemeId }: DropZ
       {/* Preview Grid */}
       {files.length > 0 && (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-          {files.map((file, index) => (
-            <div key={index} className="relative group aspect-square">
-              <img
-                src={file.preview}
-                alt={file.name}
-                className="w-full h-full object-cover rounded-lg"
-              />
-              <button
-                onClick={() => removeFile(index)}
-                className="absolute top-2 right-2 p-1 bg-black/60 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-              >
-                <X className="w-4 h-4" />
-              </button>
-              <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/80 to-transparent rounded-b-lg">
-                <p className="text-xs truncate">{file.name}</p>
+          {files.map((file, index) => {
+            const fileSizeMB = (file.size / 1024 / 1024).toFixed(2);
+            const fileSizeKB = (file.size / 1024).toFixed(0);
+            const displaySize = file.size >= 1024 * 1024 ? `${fileSizeMB} MB` : `${fileSizeKB} KB`;
+
+            return (
+              <div key={index} className="relative group aspect-square">
+                <img
+                  src={file.preview}
+                  alt={file.name}
+                  className="w-full h-full object-cover rounded-lg"
+                />
+                {/* File size badge */}
+                <div className="absolute top-2 left-2 px-2 py-1 bg-black/70 rounded text-xs font-medium text-white">
+                  {displaySize}
+                </div>
+                <button
+                  onClick={() => removeFile(index)}
+                  className="absolute top-2 right-2 p-1 bg-black/60 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+                <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/80 to-transparent rounded-b-lg">
+                  <p className="text-xs truncate">{file.name}</p>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
