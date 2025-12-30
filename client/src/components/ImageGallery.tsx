@@ -58,10 +58,22 @@ export function ImageGallery({ themeId, themes, searchQuery, onImageUpdate }: Im
         mood: selectedMood || undefined
       });
 
+      // Sort images by original_name (filename) in ascending order
+      const sortedImages = result.images.sort((a, b) =>
+        a.original_name.localeCompare(b.original_name, 'fr', { sensitivity: 'base' })
+      );
+
       if (reset) {
-        setImages(result.images);
+        setImages(sortedImages);
       } else {
-        setImages(prev => [...prev, ...result.images]);
+        // When adding more images, merge and re-sort the entire list
+        const allImages = [...images, ...sortedImages];
+        const uniqueImages = allImages.filter((img, index, self) =>
+          index === self.findIndex(i => i.id === img.id)
+        );
+        setImages(uniqueImages.sort((a, b) =>
+          a.original_name.localeCompare(b.original_name, 'fr', { sensitivity: 'base' })
+        ));
       }
       setTotal(result.total);
       setHasMore(offset + result.images.length < result.total);
@@ -582,9 +594,9 @@ export function ImageGallery({ themeId, themes, searchQuery, onImageUpdate }: Im
                 </div>
 
                 {/* Filename */}
-                <div className="mb-3 pb-3 border-b border-gray-800">
-                  <span className="text-xs text-gray-500">Fichier (référence):</span>
-                  <p className="text-xs text-gray-400 truncate">{selectedImage.original_name}</p>
+                <div className="mb-4 pb-4 border-b-2 border-gray-700 bg-gray-800/50 rounded-lg p-3">
+                  <span className="text-xs font-medium text-gray-400 uppercase tracking-wide">Fichier (référence)</span>
+                  <p className="text-sm text-gray-200 mt-1 break-words leading-relaxed">{selectedImage.original_name}</p>
                 </div>
 
                 {/* Title */}
@@ -745,9 +757,9 @@ export function ImageGallery({ themeId, themes, searchQuery, onImageUpdate }: Im
             onClick={(e) => e.stopPropagation()}
           >
             {/* Filename - Read-only storage reference */}
-            <div className="mb-3 pb-3 border-b border-gray-800">
-              <span className="text-xs text-gray-500">Fichier (référence):</span>
-              <p className="text-xs text-gray-400 truncate" title={selectedImage.original_name}>
+            <div className="mb-4 pb-4 border-b-2 border-gray-700 bg-gray-800/50 rounded-lg p-3">
+              <span className="text-xs font-medium text-gray-400 uppercase tracking-wide">Fichier (référence)</span>
+              <p className="text-sm text-gray-200 mt-1 break-words leading-relaxed">
                 {selectedImage.original_name}
               </p>
             </div>
