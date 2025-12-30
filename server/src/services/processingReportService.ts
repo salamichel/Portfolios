@@ -39,13 +39,21 @@ export class ProcessingReportTracker {
   /**
    * Track a successful API call
    */
-  trackApiCall(tokens: { prompt: number; completion: number; total: number }, durationMs: number, retryAttempt?: number): void {
+  trackApiCall(
+    tokens: { prompt: number; completion: number; total: number },
+    durationMs: number,
+    retryAttempt?: number,
+    prompt?: string,
+    response?: string
+  ): void {
     const apiCall: ApiCallDetail = {
       timestamp: new Date().toISOString(),
       success: true,
       tokens,
       duration_ms: durationMs,
-      retry_attempt: retryAttempt
+      retry_attempt: retryAttempt,
+      prompt,
+      response
     };
 
     this.apiCalls.push(apiCall);
@@ -54,13 +62,14 @@ export class ProcessingReportTracker {
   /**
    * Track a failed API call
    */
-  trackApiError(error: string, durationMs: number, retryAttempt?: number): void {
+  trackApiError(error: string, durationMs: number, retryAttempt?: number, prompt?: string): void {
     const apiCall: ApiCallDetail = {
       timestamp: new Date().toISOString(),
       success: false,
       duration_ms: durationMs,
       error,
-      retry_attempt: retryAttempt
+      retry_attempt: retryAttempt,
+      prompt
     };
 
     this.apiCalls.push(apiCall);
