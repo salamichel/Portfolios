@@ -11,6 +11,15 @@ export interface ImageAnalysis {
   mood: string;
 }
 
+export interface ImageAnalysisBatchResult {
+  analyses: ImageAnalysis[];
+  usageMetadata?: {
+    promptTokenCount: number;
+    candidatesTokenCount: number;
+    totalTokenCount: number;
+  };
+}
+
 export async function analyzeImage(imagePath: string): Promise<ImageAnalysis> {
   try {
     const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-lite' });
@@ -69,11 +78,12 @@ Respond in JSON format exactly like this:
 /**
  * Analyze multiple images in a single Gemini API call (up to 10 images)
  * Much more efficient than calling analyzeImage() multiple times
+ * Returns analyses AND usage metadata for API call tracking
  */
-export async function analyzeImagesBatch(imagePaths: string[]): Promise<ImageAnalysis[]> {
+export async function analyzeImagesBatch(imagePaths: string[]): Promise<ImageAnalysisBatchResult> {
   try {
     if (imagePaths.length === 0) {
-      return [];
+      return { analyses: [] };
     }
 
     // Gemini supports up to 10 images per request
@@ -130,6 +140,13 @@ Respond in JSON format exactly like this:
     const response = await result.response;
     const text = response.text();
 
+    // Extract usage metadata for tracking
+    const usageMetadata = response.usageMetadata ? {
+      promptTokenCount: response.usageMetadata.promptTokenCount || 0,
+      candidatesTokenCount: response.usageMetadata.candidatesTokenCount || 0,
+      totalTokenCount: response.usageMetadata.totalTokenCount || 0
+    } : undefined;
+
     // Extract JSON array from response
     const jsonMatch = text.match(/\[[\s\S]*\]/);
     if (!jsonMatch) {
@@ -142,12 +159,17 @@ Respond in JSON format exactly like this:
       throw new Error(`Expected ${imagePaths.length} analyses, got ${Array.isArray(parsed) ? parsed.length : 'non-array'}`);
     }
 
-    return parsed.map(item => ({
+    const analyses = parsed.map(item => ({
       title: item.title || 'Untitled',
       description: item.description || '',
       tags: Array.isArray(item.tags) ? item.tags : [],
       mood: item.mood || 'undefined'
     }));
+
+    return {
+      analyses,
+      usageMetadata
+    };
   } catch (error) {
     console.error('Gemini batch analysis error:', error);
     throw error;

@@ -4,8 +4,9 @@ import sharp from 'sharp';
 import path from 'path';
 import fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
-import { imageDb } from '../database.js';
+import { imageDb, enrichmentReportDb } from '../database.js';
 import { analyzeImage, analyzeImagesBatch } from '../services/gemini.js';
+import { ImageEnrichmentReportTracker } from '../services/imageEnrichmentReportService.js';
 
 const router = Router();
 
@@ -275,29 +276,35 @@ router.post('/:id/enrich', async (req, res) => {
 
 // Batch enrich multiple images with Gemini (TRUE batch: 1 API call for up to 10 images)
 router.post('/batch-enrich', async (req, res) => {
+  const { image_ids } = req.body;
+  let tracker: ImageEnrichmentReportTracker | null = null;
+
   try {
     if (!process.env.GEMINI_API_KEY) {
       return res.status(400).json({ error: 'Gemini API key not configured' });
     }
 
-    const { image_ids } = req.body;
-
     if (!image_ids || !Array.isArray(image_ids) || image_ids.length === 0) {
       return res.status(400).json({ error: 'image_ids array is required' });
     }
+
+    // Initialize tracker
+    tracker = new ImageEnrichmentReportTracker(image_ids.length);
+    console.log(`[Batch Enrich] Started tracking report: ${tracker.getReportId()}`);
 
     const BATCH_SIZE = 10; // Gemini supports up to 10 images per request
     const results = {
       total: image_ids.length,
       successful: 0,
       failed: 0,
-      errors: [] as Array<{ id: string; error: string }>
+      errors: [] as Array<{ id: string; error: string }>,
+      report_id: tracker.getReportId()
     };
 
     // Process images in batches of 10
     for (let i = 0; i < image_ids.length; i += BATCH_SIZE) {
       const batchIds = image_ids.slice(i, i + BATCH_SIZE);
-      console.log(`Processing batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(image_ids.length / BATCH_SIZE)} (${batchIds.length} images) - TRUE BATCH MODE`);
+      console.log(`[Batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(image_ids.length / BATCH_SIZE)}] Processing ${batchIds.length} images - TRUE BATCH MODE`);
 
       try {
         // Prepare batch data
@@ -308,6 +315,7 @@ router.post('/batch-enrich', async (req, res) => {
           if (!image) {
             results.failed++;
             results.errors.push({ id: imageId, error: 'Image not found' });
+            tracker.trackImageFailure();
             continue;
           }
 
@@ -317,6 +325,7 @@ router.post('/batch-enrich', async (req, res) => {
           if (!fs.existsSync(webpPath)) {
             results.failed++;
             results.errors.push({ id: imageId, error: 'WebP file not found' });
+            tracker.trackImageFailure();
             continue;
           }
 
@@ -327,9 +336,32 @@ router.post('/batch-enrich', async (req, res) => {
           continue; // Skip if no valid images in this batch
         }
 
-        // Call Gemini ONCE with all images in the batch
+        // Call Gemini ONCE with all images in the batch - TRACK API CALL
+        const callStartTime = Date.now();
         const imagePaths = batchData.map(item => item.webpPath);
-        const analyses = await analyzeImagesBatch(imagePaths);
+        const { analyses, usageMetadata } = await analyzeImagesBatch(imagePaths);
+        const callDuration = Date.now() - callStartTime;
+
+        // Track successful API call
+        if (usageMetadata) {
+          tracker.trackApiCall(
+            {
+              prompt: usageMetadata.promptTokenCount,
+              completion: usageMetadata.candidatesTokenCount,
+              total: usageMetadata.totalTokenCount
+            },
+            callDuration,
+            batchData.length
+          );
+          console.log(`[Batch API] ✓ ${batchData.length} images analyzed in ${callDuration}ms - Tokens: ${usageMetadata.totalTokenCount}`);
+        } else {
+          tracker.trackApiCall(
+            { prompt: 0, completion: 0, total: 0 },
+            callDuration,
+            batchData.length
+          );
+          console.log(`[Batch API] ✓ ${batchData.length} images analyzed in ${callDuration}ms - No token data`);
+        }
 
         // Update database with results
         for (let j = 0; j < batchData.length; j++) {
@@ -350,13 +382,16 @@ router.post('/batch-enrich', async (req, res) => {
             console.error(`Failed to update image ${id}:`, updateError);
             results.failed++;
             results.errors.push({ id, error: errorMessage });
+            tracker.trackImageFailure();
           }
         }
 
       } catch (batchError) {
-        // If batch fails, mark all images in batch as failed
+        // Track failed API call
+        const callDuration = Date.now() - Date.now();
         const errorMessage = batchError instanceof Error ? batchError.message : 'Batch processing failed';
-        console.error(`Batch processing failed:`, batchError);
+        tracker.trackApiError(errorMessage, callDuration, batchIds.length);
+        console.error(`[Batch API] ✗ Failed:`, batchError);
 
         for (const imageId of batchIds) {
           results.failed++;
@@ -365,10 +400,59 @@ router.post('/batch-enrich', async (req, res) => {
       }
     }
 
+    // Complete the tracking report
+    tracker.complete();
+    console.log(`[Batch Enrich] Completed - ${results.successful} successful, ${results.failed} failed`);
+
     res.json(results);
   } catch (error) {
     console.error('Batch enrich error:', error);
+
+    // Mark tracker as failed if it was initialized
+    if (tracker) {
+      tracker.fail(error instanceof Error ? error.message : 'Unknown error');
+    }
+
     res.status(500).json({ error: 'Failed to batch enrich images' });
+  }
+});
+
+// Get enrichment reports
+router.get('/enrichment-reports', (req, res) => {
+  try {
+    const reports = enrichmentReportDb.getAll();
+    res.json(reports);
+  } catch (error) {
+    console.error('[API] Error fetching enrichment reports:', error);
+    res.status(500).json({ error: 'Failed to fetch enrichment reports' });
+  }
+});
+
+// Get latest enrichment report
+router.get('/enrichment-reports/latest', (req, res) => {
+  try {
+    const report = enrichmentReportDb.getLatest();
+    if (!report) {
+      return res.status(404).json({ error: 'No enrichment reports found' });
+    }
+    res.json(report);
+  } catch (error) {
+    console.error('[API] Error fetching latest enrichment report:', error);
+    res.status(500).json({ error: 'Failed to fetch latest enrichment report' });
+  }
+});
+
+// Get enrichment report by ID
+router.get('/enrichment-reports/:id', (req, res) => {
+  try {
+    const report = enrichmentReportDb.getById(req.params.id);
+    if (!report) {
+      return res.status(404).json({ error: 'Enrichment report not found' });
+    }
+    res.json(report);
+  } catch (error) {
+    console.error('[API] Error fetching enrichment report:', error);
+    res.status(500).json({ error: 'Failed to fetch enrichment report' });
   }
 });
 

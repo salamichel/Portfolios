@@ -115,6 +115,31 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_processing_reports_book ON book_processing_reports(book_id);
   CREATE INDEX IF NOT EXISTS idx_processing_reports_status ON book_processing_reports(status);
   CREATE INDEX IF NOT EXISTS idx_processing_reports_started ON book_processing_reports(started_at);
+
+  -- Image enrichment reports (for batch AI enrichment tracking)
+  CREATE TABLE IF NOT EXISTS image_enrichment_reports (
+    id TEXT PRIMARY KEY,
+    status TEXT NOT NULL,
+    started_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    completed_at DATETIME,
+    image_count INTEGER,
+    total_api_calls INTEGER DEFAULT 0,
+    successful_api_calls INTEGER DEFAULT 0,
+    failed_api_calls INTEGER DEFAULT 0,
+    total_tokens INTEGER DEFAULT 0,
+    prompt_tokens INTEGER DEFAULT 0,
+    completion_tokens INTEGER DEFAULT 0,
+    execution_time_ms INTEGER,
+    error_message TEXT,
+    api_calls_detail TEXT,
+    images_enriched INTEGER DEFAULT 0,
+    images_failed INTEGER DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_enrichment_reports_status ON image_enrichment_reports(status);
+  CREATE INDEX IF NOT EXISTS idx_enrichment_reports_started ON image_enrichment_reports(started_at);
 `);
 
 // Migration: Add position column if it doesn't exist (for existing databases)
@@ -303,6 +328,27 @@ export interface BookProcessingReport {
   error_message: string | null;
   api_calls_detail: ApiCallDetail[] | null;
   cache_hit: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ImageEnrichmentReport {
+  id: string;
+  status: ProcessingStatus;
+  started_at: string;
+  completed_at: string | null;
+  image_count: number;
+  total_api_calls: number;
+  successful_api_calls: number;
+  failed_api_calls: number;
+  total_tokens: number;
+  prompt_tokens: number;
+  completion_tokens: number;
+  execution_time_ms: number | null;
+  error_message: string | null;
+  api_calls_detail: ApiCallDetail[] | null;
+  images_enriched: number;
+  images_failed: number;
   created_at: string;
   updated_at: string;
 }
@@ -1211,6 +1257,102 @@ export const processingReportDb = {
 
   delete(id: string): boolean {
     const result = db.prepare('DELETE FROM book_processing_reports WHERE id = ?').run(id);
+    return result.changes > 0;
+  }
+};
+
+export const enrichmentReportDb = {
+  getAll(): ImageEnrichmentReport[] {
+    const reports = db.prepare('SELECT * FROM image_enrichment_reports ORDER BY started_at DESC').all() as any[];
+    return reports.map(r => ({
+      ...r,
+      api_calls_detail: r.api_calls_detail ? JSON.parse(r.api_calls_detail) : null
+    }));
+  },
+
+  getById(id: string): ImageEnrichmentReport | undefined {
+    const report = db.prepare('SELECT * FROM image_enrichment_reports WHERE id = ?').get(id) as any;
+    if (!report) return undefined;
+    return {
+      ...report,
+      api_calls_detail: report.api_calls_detail ? JSON.parse(report.api_calls_detail) : null
+    };
+  },
+
+  getLatest(): ImageEnrichmentReport | undefined {
+    const report = db.prepare(`
+      SELECT * FROM image_enrichment_reports
+      ORDER BY started_at DESC
+      LIMIT 1
+    `).get() as any;
+
+    if (!report) return undefined;
+    return {
+      ...report,
+      api_calls_detail: report.api_calls_detail ? JSON.parse(report.api_calls_detail) : null
+    };
+  },
+
+  create(report: Omit<ImageEnrichmentReport, 'created_at' | 'updated_at'>): ImageEnrichmentReport {
+    db.prepare(`
+      INSERT INTO image_enrichment_reports (
+        id, status, started_at, completed_at, image_count,
+        total_api_calls, successful_api_calls, failed_api_calls,
+        total_tokens, prompt_tokens, completion_tokens,
+        execution_time_ms, error_message, api_calls_detail,
+        images_enriched, images_failed
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      report.id,
+      report.status,
+      report.started_at,
+      report.completed_at,
+      report.image_count,
+      report.total_api_calls,
+      report.successful_api_calls,
+      report.failed_api_calls,
+      report.total_tokens,
+      report.prompt_tokens,
+      report.completion_tokens,
+      report.execution_time_ms,
+      report.error_message,
+      report.api_calls_detail ? JSON.stringify(report.api_calls_detail) : null,
+      report.images_enriched,
+      report.images_failed
+    );
+    return this.getById(report.id)!;
+  },
+
+  update(id: string, data: Partial<Omit<ImageEnrichmentReport, 'id' | 'created_at' | 'updated_at'>>): ImageEnrichmentReport | undefined {
+    const fields: string[] = [];
+    const values: any[] = [];
+
+    if (data.status !== undefined) { fields.push('status = ?'); values.push(data.status); }
+    if (data.completed_at !== undefined) { fields.push('completed_at = ?'); values.push(data.completed_at); }
+    if (data.image_count !== undefined) { fields.push('image_count = ?'); values.push(data.image_count); }
+    if (data.total_api_calls !== undefined) { fields.push('total_api_calls = ?'); values.push(data.total_api_calls); }
+    if (data.successful_api_calls !== undefined) { fields.push('successful_api_calls = ?'); values.push(data.successful_api_calls); }
+    if (data.failed_api_calls !== undefined) { fields.push('failed_api_calls = ?'); values.push(data.failed_api_calls); }
+    if (data.total_tokens !== undefined) { fields.push('total_tokens = ?'); values.push(data.total_tokens); }
+    if (data.prompt_tokens !== undefined) { fields.push('prompt_tokens = ?'); values.push(data.prompt_tokens); }
+    if (data.completion_tokens !== undefined) { fields.push('completion_tokens = ?'); values.push(data.completion_tokens); }
+    if (data.execution_time_ms !== undefined) { fields.push('execution_time_ms = ?'); values.push(data.execution_time_ms); }
+    if (data.error_message !== undefined) { fields.push('error_message = ?'); values.push(data.error_message); }
+    if (data.api_calls_detail !== undefined) { fields.push('api_calls_detail = ?'); values.push(JSON.stringify(data.api_calls_detail)); }
+    if (data.images_enriched !== undefined) { fields.push('images_enriched = ?'); values.push(data.images_enriched); }
+    if (data.images_failed !== undefined) { fields.push('images_failed = ?'); values.push(data.images_failed); }
+
+    if (fields.length === 0) return this.getById(id);
+
+    fields.push('updated_at = CURRENT_TIMESTAMP');
+    values.push(id);
+
+    db.prepare(`UPDATE image_enrichment_reports SET ${fields.join(', ')} WHERE id = ?`).run(...values);
+    return this.getById(id);
+  },
+
+  delete(id: string): boolean {
+    const result = db.prepare('DELETE FROM image_enrichment_reports WHERE id = ?').run(id);
     return result.changes > 0;
   }
 };
