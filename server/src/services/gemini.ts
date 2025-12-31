@@ -76,7 +76,7 @@ Respond in JSON format exactly like this:
 }
 
 /**
- * Analyze multiple images in a single Gemini API call (up to 10 images)
+ * Analyze multiple images in a single Gemini API call (up to 75 images)
  * Much more efficient than calling analyzeImage() multiple times
  * Returns analyses AND usage metadata for API call tracking
  */
@@ -86,9 +86,9 @@ export async function analyzeImagesBatch(imagePaths: string[]): Promise<ImageAna
       return { analyses: [] };
     }
 
-    // Gemini supports up to 20 images per request
-    if (imagePaths.length > 20) {
-      throw new Error('Cannot analyze more than 20 images in a single batch');
+    // Gemini 3 Flash has 1M token context - 75 images uses ~150-300k tokens (safe margin)
+    if (imagePaths.length > 75) {
+      throw new Error('Cannot analyze more than 75 images in a single batch');
     }
 
     const model = genAI.getGenerativeModel({ model: 'gemini-3-flash-preview' });
