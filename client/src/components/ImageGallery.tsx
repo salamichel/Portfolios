@@ -283,7 +283,8 @@ export function ImageGallery({ themeId, themes, searchQuery, onImageUpdate }: Im
   };
 
   const getTagCount = (tag: string): number => {
-    const tagData = availableTags.find(t => t.tag === tag);
+    // Case-insensitive search for better matching
+    const tagData = availableTags.find(t => t.tag.toLowerCase() === tag.toLowerCase());
     return tagData?.count || 0;
   };
 
@@ -647,11 +648,9 @@ export function ImageGallery({ themeId, themes, searchQuery, onImageUpdate }: Im
                             className="group relative px-3 py-1.5 bg-gradient-to-r from-blue-500/20 to-indigo-500/20 hover:from-blue-500/40 hover:to-indigo-500/40 border border-blue-500/30 hover:border-blue-400/50 rounded-full text-sm transition-all cursor-pointer shadow-sm hover:shadow-md"
                           >
                             <span className="text-blue-200 group-hover:text-blue-100 font-medium">{tag}</span>
-                            {count > 0 && (
-                              <span className="ml-2 px-1.5 py-0.5 bg-blue-600/60 text-blue-100 text-xs rounded-full font-semibold">
-                                {count}
-                              </span>
-                            )}
+                            <span className="ml-2 px-1.5 py-0.5 bg-blue-600/60 text-blue-100 text-xs rounded-full font-semibold">
+                              {count || 1}
+                            </span>
                           </button>
                         );
                       })}
@@ -908,11 +907,9 @@ export function ImageGallery({ themeId, themes, searchQuery, onImageUpdate }: Im
                             className="group relative px-3 py-1.5 bg-gradient-to-r from-blue-500/20 to-indigo-500/20 hover:from-blue-500/40 hover:to-indigo-500/40 border border-blue-500/30 hover:border-blue-400/50 rounded-full text-sm transition-all cursor-pointer shadow-sm hover:shadow-md"
                           >
                             <span className="text-blue-200 group-hover:text-blue-100 font-medium">{tag}</span>
-                            {count > 0 && (
-                              <span className="ml-2 px-1.5 py-0.5 bg-blue-600/60 text-blue-100 text-xs rounded-full font-semibold">
-                                {count}
-                              </span>
-                            )}
+                            <span className="ml-2 px-1.5 py-0.5 bg-blue-600/60 text-blue-100 text-xs rounded-full font-semibold">
+                              {count || 1}
+                            </span>
                           </button>
                         );
                       })}
