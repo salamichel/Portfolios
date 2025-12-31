@@ -150,4 +150,71 @@ router.post('/apply-suggestions', async (req, res) => {
   }
 });
 
+// Fix duplicate tags in all images
+router.post('/fix-duplicate-tags', async (req, res) => {
+  try {
+    console.log('[Cleanup] Starting duplicate tags fix...');
+
+    const allImages = imageDb.getAll({ limit: 10000 }).images;
+    let totalImages = 0;
+    let imagesFixed = 0;
+    let totalDuplicatesRemoved = 0;
+
+    for (const img of allImages) {
+      if (!img.tags) continue;
+
+      try {
+        const parsed = JSON.parse(img.tags);
+        if (!Array.isArray(parsed)) continue;
+
+        totalImages++;
+
+        // Remove duplicates while preserving order
+        const uniqueTags: string[] = [];
+        const seen = new Set<string>();
+
+        for (const tag of parsed) {
+          if (tag && typeof tag === 'string') {
+            const normalized = tag.trim();
+            if (normalized && !seen.has(normalized)) {
+              seen.add(normalized);
+              uniqueTags.push(normalized);
+            }
+          }
+        }
+
+        // Check if we removed any duplicates
+        if (uniqueTags.length < parsed.length) {
+          const duplicatesRemoved = parsed.length - uniqueTags.length;
+          totalDuplicatesRemoved += duplicatesRemoved;
+          imagesFixed++;
+
+          console.log(`[Cleanup] Fixed image ${img.id}: removed ${duplicatesRemoved} duplicates`);
+
+          // Update the database
+          imageDb.update(img.id, {
+            tags: JSON.stringify(uniqueTags)
+          });
+        }
+      } catch (e) {
+        console.error(`[Cleanup] Error processing image ${img.id}:`, e);
+      }
+    }
+
+    res.json({
+      success: true,
+      stats: {
+        totalImagesWithTags: totalImages,
+        imagesFixed,
+        totalDuplicatesRemoved,
+        cleanImages: totalImages - imagesFixed
+      },
+      message: `Fixed ${imagesFixed} images, removed ${totalDuplicatesRemoved} duplicate tags`
+    });
+  } catch (error) {
+    console.error('Fix duplicates error:', error);
+    res.status(500).json({ error: 'Failed to fix duplicate tags' });
+  }
+});
+
 export default router;

@@ -460,11 +460,20 @@ router.get('/enrichment-reports/:id', (req, res) => {
 router.put('/:id', (req, res) => {
   try {
     const { theme_id, title, description, tags, mood } = req.body;
+
+    // Remove duplicate tags if tags is an array
+    let processedTags = tags;
+    if (Array.isArray(tags)) {
+      // Remove duplicates while preserving order
+      const uniqueTags = Array.from(new Set(tags.filter((t: any) => t && typeof t === 'string')));
+      processedTags = JSON.stringify(uniqueTags);
+    }
+
     const image = imageDb.update(req.params.id, {
       theme_id,
       title,
       description,
-      tags: Array.isArray(tags) ? JSON.stringify(tags) : tags,
+      tags: processedTags,
       mood
     });
 

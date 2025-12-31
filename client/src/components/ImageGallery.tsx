@@ -223,18 +223,21 @@ export function ImageGallery({ themeId, themes, searchQuery, onImageUpdate }: Im
 
     setSaving(true);
     try {
-      // Parse tags from comma-separated string
+      // Parse tags from comma-separated string and remove duplicates
       const tagsArray = editForm.tags
         .split(',')
         .map(t => t.trim())
         .filter(t => t.length > 0);
+
+      // Remove duplicates while preserving order
+      const uniqueTags = Array.from(new Set(tagsArray));
 
       // Note: filename is NEVER modified - it's the storage reference
       const updated = await imagesApi.update(selectedImage.id, {
         title: editForm.title || null,
         description: editForm.description || null,
         mood: editForm.mood || null,
-        tags: JSON.stringify(tagsArray)
+        tags: JSON.stringify(uniqueTags)
       });
 
       setImages(prev => prev.map(img => img.id === updated.id ? updated : img));
