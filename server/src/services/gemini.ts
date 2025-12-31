@@ -199,6 +199,14 @@ export interface CleanupSuggestions {
   moods: SimilarityGroup[];
 }
 
+// Maximum number of tags to analyze (prioritize least used tags to find duplicates)
+const MAX_TAGS_TO_ANALYZE = 300;
+
+/**
+ * Analyze tags and moods for similarities
+ * Prioritizes least popular tags (more likely to be variants/typos of popular ones)
+ * Includes some popular tags as reference targets for merging
+ */
 export async function analyzeSimilarMetadata(
   tags: Array<{ tag: string; count: number }>,
   moods: Array<{ mood: string; count: number }>
@@ -206,13 +214,33 @@ export async function analyzeSimilarMetadata(
   try {
     const model = genAI.getGenerativeModel({ model: 'gemini-3-flash-preview' });
 
+    // Tags are sorted by count DESC, so least popular are at the end
+    // Take the least popular tags, but also include top popular ones as merge targets
+    let tagsToAnalyze: Array<{ tag: string; count: number }>;
+    let skippedCount = 0;
+
+    if (tags.length <= MAX_TAGS_TO_ANALYZE) {
+      tagsToAnalyze = tags;
+      console.log(`[Gemini] Analyzing all ${tags.length} tags`);
+    } else {
+      // Keep top 50 popular tags as canonical targets + least popular tags
+      const topPopular = tags.slice(0, 50);
+      const leastPopular = tags.slice(-(MAX_TAGS_TO_ANALYZE - 50));
+      tagsToAnalyze = [...topPopular, ...leastPopular];
+      skippedCount = tags.length - tagsToAnalyze.length;
+      console.log(`[Gemini] Analyzing ${tagsToAnalyze.length} tags: top 50 popular + ${leastPopular.length} least popular (skipping ${skippedCount} middle tags)`);
+    }
+
     const prompt = `Analysez ces tags et ambiances (moods) et identifiez les groupes qui ont le même sens ou sont des variantes (synonymes, pluriel/singulier, langues différentes, fautes d'orthographe, etc.).
 
-TAGS:
-${tags.map(t => `- "${t.tag}" (utilisé ${t.count} fois)`).join('\n')}
+TAGS POPULAIRES (cibles potentielles de fusion):
+${tagsToAnalyze.slice(0, 50).map(t => `- "${t.tag}" (${t.count} images)`).join('\n')}
+
+TAGS PEU UTILISÉS (à analyser pour fusion):
+${tagsToAnalyze.slice(50).map(t => `- "${t.tag}" (${t.count} images)`).join('\n')}
 
 MOODS:
-${moods.map(m => `- "${m.mood}" (utilisé ${m.count} fois)`).join('\n')}
+${moods.map(m => `- "${m.mood}" (${m.count} images)`).join('\n')}
 
 Pour chaque groupe de termes similaires :
 1. Choisissez le terme CANONICAL (le plus utilisé ou le plus clair)
@@ -238,6 +266,7 @@ Répondez UNIQUEMENT en JSON, sans texte avant ou après :
 }
 
 Notes importantes :
+- Cherchez surtout à fusionner les tags peu utilisés vers les tags populaires
 - Ne groupez que les termes vraiment similaires/synonymes
 - Préférez le terme le plus utilisé comme canonical
 - Si un terme est unique, ne le retournez pas

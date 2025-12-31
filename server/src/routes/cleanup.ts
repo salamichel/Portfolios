@@ -10,12 +10,20 @@ router.post('/analyze', async (req, res) => {
     const tags = imageDb.getTagsWithCounts();
     const moods = imageDb.getMoodsWithCounts();
 
+    const MAX_TAGS = 300; // Must match gemini.ts
+    const tagsAnalyzed = Math.min(tags.length, MAX_TAGS);
+    const tagsSkipped = Math.max(0, tags.length - MAX_TAGS);
+
+    console.log(`[Cleanup] Analyzing ${tagsAnalyzed}/${tags.length} tags (top 50 popular + ${Math.min(tags.length, 250)} least popular) and ${moods.length} moods`);
+
     const suggestions = await analyzeSimilarMetadata(tags, moods);
 
     res.json({
       suggestions,
       stats: {
         totalTags: tags.length,
+        tagsAnalyzed,
+        tagsSkipped,
         totalMoods: moods.length,
         suggestedTagMerges: suggestions.tags.length,
         suggestedMoodMerges: suggestions.moods.length
