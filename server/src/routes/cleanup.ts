@@ -14,7 +14,7 @@ router.post('/analyze', async (req, res) => {
     const tagsAnalyzed = Math.min(tags.length, MAX_TAGS);
     const tagsSkipped = Math.max(0, tags.length - MAX_TAGS);
 
-    console.log(`[Cleanup] Analyzing ${tagsAnalyzed}/${tags.length} tags and ${moods.length} moods`);
+    console.log(`[Cleanup] Analyzing ${tagsAnalyzed}/${tags.length} tags (top 50 popular + ${Math.min(tags.length, 250)} least popular) and ${moods.length} moods`);
 
     const suggestions = await analyzeSimilarMetadata(tags, moods);
 

@@ -199,13 +199,13 @@ export interface CleanupSuggestions {
   moods: SimilarityGroup[];
 }
 
-// Maximum number of tags to analyze (prioritize most used tags)
+// Maximum number of tags to analyze (prioritize least used tags to find duplicates)
 const MAX_TAGS_TO_ANALYZE = 300;
 
 /**
  * Analyze tags and moods for similarities
- * Tags are expected to be sorted by count (descending) - most popular first
- * Only analyzes the top MAX_TAGS_TO_ANALYZE tags to avoid token limits
+ * Prioritizes least popular tags (more likely to be variants/typos of popular ones)
+ * Includes some popular tags as reference targets for merging
  */
 export async function analyzeSimilarMetadata(
   tags: Array<{ tag: string; count: number }>,
@@ -214,20 +214,30 @@ export async function analyzeSimilarMetadata(
   try {
     const model = genAI.getGenerativeModel({ model: 'gemini-3-flash-preview' });
 
-    // Limit to most popular tags (already sorted by count desc from database)
-    const tagsToAnalyze = tags.slice(0, MAX_TAGS_TO_ANALYZE);
-    const skippedCount = tags.length - tagsToAnalyze.length;
+    // Tags are sorted by count DESC, so least popular are at the end
+    // Take the least popular tags, but also include top popular ones as merge targets
+    let tagsToAnalyze: Array<{ tag: string; count: number }>;
+    let skippedCount = 0;
 
-    if (skippedCount > 0) {
-      console.log(`[Gemini] Analyzing top ${tagsToAnalyze.length} tags (skipping ${skippedCount} less popular tags)`);
-    } else {
+    if (tags.length <= MAX_TAGS_TO_ANALYZE) {
+      tagsToAnalyze = tags;
       console.log(`[Gemini] Analyzing all ${tags.length} tags`);
+    } else {
+      // Keep top 50 popular tags as canonical targets + least popular tags
+      const topPopular = tags.slice(0, 50);
+      const leastPopular = tags.slice(-(MAX_TAGS_TO_ANALYZE - 50));
+      tagsToAnalyze = [...topPopular, ...leastPopular];
+      skippedCount = tags.length - tagsToAnalyze.length;
+      console.log(`[Gemini] Analyzing ${tagsToAnalyze.length} tags: top 50 popular + ${leastPopular.length} least popular (skipping ${skippedCount} middle tags)`);
     }
 
     const prompt = `Analysez ces tags et ambiances (moods) et identifiez les groupes qui ont le même sens ou sont des variantes (synonymes, pluriel/singulier, langues différentes, fautes d'orthographe, etc.).
 
-TAGS (triés par popularité décroissante):
-${tagsToAnalyze.map(t => `- "${t.tag}" (${t.count} images)`).join('\n')}
+TAGS POPULAIRES (cibles potentielles de fusion):
+${tagsToAnalyze.slice(0, 50).map(t => `- "${t.tag}" (${t.count} images)`).join('\n')}
+
+TAGS PEU UTILISÉS (à analyser pour fusion):
+${tagsToAnalyze.slice(50).map(t => `- "${t.tag}" (${t.count} images)`).join('\n')}
 
 MOODS:
 ${moods.map(m => `- "${m.mood}" (${m.count} images)`).join('\n')}
@@ -256,6 +266,7 @@ Répondez UNIQUEMENT en JSON, sans texte avant ou après :
 }
 
 Notes importantes :
+- Cherchez surtout à fusionner les tags peu utilisés vers les tags populaires
 - Ne groupez que les termes vraiment similaires/synonymes
 - Préférez le terme le plus utilisé comme canonical
 - Si un terme est unique, ne le retournez pas
