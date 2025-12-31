@@ -84,22 +84,6 @@ function normalizeMood(mood: string, popularMoods: string[]): string {
 }
 
 /**
- * Sanitize tag/mood by removing embedded count numbers
- * Examples: "musique85" -> "musique", "danse42" -> "danse"
- */
-function sanitizeMetadataItem(item: string): string {
-  if (!item || typeof item !== 'string') return item;
-
-  // Remove trailing numbers and whitespace
-  // Matches patterns like: "musique85", "musique 85", "musique (85)", etc.
-  return item
-    .replace(/\s*\d+\s*$/, '')           // Remove trailing numbers
-    .replace(/\s*\(\s*\d+\s*\)\s*$/, '') // Remove trailing (85)
-    .replace(/\s*\(\s*\d+\s+images?\s*\)\s*$/i, '') // Remove trailing (85 images)
-    .trim();
-}
-
-/**
  * Normalize tags array by mapping to existing popular tags
  */
 function normalizeTags(tags: string[], popularTags: string[]): string[] {
@@ -486,9 +470,7 @@ IMPORTANT :
 - Préférez TOUJOURS le terme français au terme anglais
 - Préférez le terme le PLUS UTILISÉ comme canonical (sauf si anglais)
 - Fusionnez les tags à 1-2 usages vers les tags plus populaires quand c'est pertinent
-- Si un terme est unique ET sans équivalent, ne le retournez pas
-- CRITIQUE : Dans vos réponses JSON, retournez SEULEMENT les noms des tags/moods, SANS les comptes d'images
-  Exemple : "musique" et NON "musique85" ou "musique (85 images)"`;
+- Si un terme est unique ET sans équivalent, ne le retournez pas`;
 
     const result = await model.generateContent(prompt);
     const response = await result.response;
@@ -501,28 +483,8 @@ IMPORTANT :
     }
 
     const parsed = JSON.parse(jsonMatch[0]);
-
-    // Sanitize tags to remove any embedded counts
-    const geminiTags = Array.isArray(parsed.tags)
-      ? parsed.tags.map((group: any) => ({
-          canonical: sanitizeMetadataItem(group.canonical),
-          similar: Array.isArray(group.similar)
-            ? group.similar.map((s: string) => sanitizeMetadataItem(s))
-            : group.similar,
-          reason: group.reason
-        }))
-      : [];
-
-    // Sanitize moods to remove any embedded counts
-    const geminiMoods = Array.isArray(parsed.moods)
-      ? parsed.moods.map((group: any) => ({
-          canonical: sanitizeMetadataItem(group.canonical),
-          similar: Array.isArray(group.similar)
-            ? group.similar.map((s: string) => sanitizeMetadataItem(s))
-            : group.similar,
-          reason: group.reason
-        }))
-      : [];
+    const geminiTags = Array.isArray(parsed.tags) ? parsed.tags : [];
+    const geminiMoods = Array.isArray(parsed.moods) ? parsed.moods : [];
 
     console.log(`[Gemini] AI detected ${geminiTags.length} tag groups, ${geminiMoods.length} mood groups`);
 
