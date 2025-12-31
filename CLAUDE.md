@@ -148,3 +148,55 @@ npm run build            # Build client + server
 - **Styling**: Tailwind CSS avec thème sombre global
 - **Images**: Sharp pour conversion WebP et thumbnails
 - **IDs**: UUIDs générés côté serveur
+
+---
+
+## Maintenance de ce fichier (Instructions pour Claude)
+
+> **IMPORTANT**: Ce fichier doit rester à jour avec l'évolution du codebase.
+
+### Quand mettre à jour CLAUDE.md
+
+Claude doit mettre à jour ce fichier automatiquement lors de :
+
+1. **Ajout de nouveaux fichiers/dossiers importants**
+   - Nouveaux composants React significatifs
+   - Nouvelles routes API
+   - Nouveaux services
+
+2. **Modifications structurelles**
+   - Renommage de fichiers clés
+   - Changement d'architecture
+   - Nouvelles tables en base de données
+
+3. **Nouvelles fonctionnalités majeures**
+   - Ajouter une entrée dans "Tâches courantes"
+   - Documenter les nouveaux patterns
+
+4. **Changements de dépendances majeures**
+   - Mise à jour de version importante (React, Express, etc.)
+   - Ajout de nouvelles bibliothèques clés
+
+### Comment maintenir ce fichier
+
+```markdown
+Après chaque modification significative du codebase :
+1. Vérifier si CLAUDE.md reflète encore la réalité
+2. Mettre à jour les sections concernées
+3. Inclure la mise à jour dans le même commit ou un commit séparé
+```
+
+### Sections à surveiller
+
+| Section | Mettre à jour quand... |
+|---------|------------------------|
+| Structure du projet | Nouveaux dossiers/fichiers importants |
+| Tâches courantes | Nouveau workflow ou fonctionnalité |
+| Base de données | Nouvelle table ou modification schéma |
+| Variables d'environnement | Nouvelle config requise |
+| Fichiers volumineux | Fichier devient >20KB ou est critique |
+
+### Rappel automatique
+
+Si Claude effectue une modification qui devrait mettre à jour ce fichier mais ne le fait pas, l'utilisateur peut rappeler :
+> "N'oublie pas de mettre à jour CLAUDE.md avec ces changements"
