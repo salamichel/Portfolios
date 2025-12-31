@@ -10,10 +10,11 @@ router.post('/analyze', async (req, res) => {
     const tags = imageDb.getTagsWithCounts();
     const moods = imageDb.getMoodsWithCounts();
 
-    const TAG_BATCH_SIZE = 150; // Must match gemini.ts
-    const batchesUsed = Math.ceil(tags.length / TAG_BATCH_SIZE);
+    const MAX_TAGS = 300; // Must match gemini.ts
+    const tagsAnalyzed = Math.min(tags.length, MAX_TAGS);
+    const tagsSkipped = Math.max(0, tags.length - MAX_TAGS);
 
-    console.log(`[Cleanup] Analyzing ${tags.length} tags and ${moods.length} moods (${batchesUsed} batch${batchesUsed > 1 ? 'es' : ''})`);
+    console.log(`[Cleanup] Analyzing ${tagsAnalyzed}/${tags.length} tags and ${moods.length} moods`);
 
     const suggestions = await analyzeSimilarMetadata(tags, moods);
 
@@ -21,11 +22,11 @@ router.post('/analyze', async (req, res) => {
       suggestions,
       stats: {
         totalTags: tags.length,
+        tagsAnalyzed,
+        tagsSkipped,
         totalMoods: moods.length,
         suggestedTagMerges: suggestions.tags.length,
-        suggestedMoodMerges: suggestions.moods.length,
-        batchesUsed,
-        batchSize: TAG_BATCH_SIZE
+        suggestedMoodMerges: suggestions.moods.length
       }
     });
   } catch (error) {
