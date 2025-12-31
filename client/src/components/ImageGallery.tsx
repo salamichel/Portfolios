@@ -322,15 +322,6 @@ export function ImageGallery({ themeId, themes, searchQuery, onImageUpdate }: Im
     return images.filter(img => selectedImages.has(img.id));
   };
 
-  if (images.length === 0 && !loading) {
-    return (
-      <div className="text-center py-20 text-gray-400">
-        <p className="text-lg">Aucune image trouvée</p>
-        <p className="text-sm mt-2">Téléversez des images pour commencer</p>
-      </div>
-    );
-  }
-
   return (
     <>
       {/* Stats and selection controls */}
@@ -433,8 +424,18 @@ export function ImageGallery({ themeId, themes, searchQuery, onImageUpdate }: Im
         )}
       </div>
 
-      {/* Grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+      {/* Empty state or Grid */}
+      {images.length === 0 && !loading ? (
+        <div className="text-center py-20 text-gray-400">
+          <p className="text-lg">Aucune image trouvée</p>
+          <p className="text-sm mt-2">
+            {selectedTag || selectedMood || searchQuery
+              ? 'Essayez de modifier les filtres de recherche'
+              : 'Téléversez des images pour commencer'}
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
         {images.map(image => {
           const isSelected = selectedImages.has(image.id);
           return (
@@ -483,7 +484,8 @@ export function ImageGallery({ themeId, themes, searchQuery, onImageUpdate }: Im
             </div>
           );
         })}
-      </div>
+        </div>
+      )}
 
       {/* Load more trigger */}
       <div ref={loadMoreRef} className="h-10 flex items-center justify-center mt-4">
