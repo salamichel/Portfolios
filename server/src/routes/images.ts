@@ -274,7 +274,7 @@ router.post('/:id/enrich', async (req, res) => {
   }
 });
 
-// Batch enrich multiple images with Gemini (TRUE batch: 1 API call for up to 10 images)
+// Batch enrich multiple images with Gemini (TRUE batch: 1 API call for up to 75 images)
 router.post('/batch-enrich', async (req, res) => {
   const { image_ids } = req.body;
   let tracker: ImageEnrichmentReportTracker | null = null;
@@ -292,7 +292,7 @@ router.post('/batch-enrich', async (req, res) => {
     tracker = new ImageEnrichmentReportTracker(image_ids.length);
     console.log(`[Batch Enrich] Started tracking report: ${tracker.getReportId()}`);
 
-    const BATCH_SIZE = 20; // Gemini supports up to 20 images per request
+    const BATCH_SIZE = 75; // Gemini 3 Flash can handle 75 images per batch efficiently
     const results = {
       total: image_ids.length,
       successful: 0,
@@ -301,7 +301,7 @@ router.post('/batch-enrich', async (req, res) => {
       report_id: tracker.getReportId()
     };
 
-    // Process images in batches of 10
+    // Process images in batches
     for (let i = 0; i < image_ids.length; i += BATCH_SIZE) {
       const batchIds = image_ids.slice(i, i + BATCH_SIZE);
       console.log(`[Batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(image_ids.length / BATCH_SIZE)}] Processing ${batchIds.length} images - TRUE BATCH MODE`);
