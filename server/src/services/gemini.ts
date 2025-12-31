@@ -200,19 +200,66 @@ export interface CleanupSuggestions {
 }
 
 /**
+ * Pre-process tags to detect obvious duplicates (case differences)
+ * Returns groups of tags that differ only by case
+ */
+function detectCaseDuplicates(
+  items: Array<{ tag?: string; mood?: string; count: number }>
+): SimilarityGroup[] {
+  const groups = new Map<string, Array<{ original: string; count: number }>>();
+
+  // Group by lowercase version
+  for (const item of items) {
+    const original = item.tag || item.mood || '';
+    const lowercase = original.toLowerCase();
+
+    if (!groups.has(lowercase)) {
+      groups.set(lowercase, []);
+    }
+    groups.get(lowercase)!.push({ original, count: item.count });
+  }
+
+  // Find groups with multiple case variations
+  const suggestions: SimilarityGroup[] = [];
+  for (const [lowercase, variants] of groups.entries()) {
+    if (variants.length > 1) {
+      // Sort by count (descending) to pick most used as canonical
+      variants.sort((a, b) => b.count - a.count);
+
+      const canonical = variants[0].original;
+      const similar = variants.slice(1).map(v => v.original);
+
+      suggestions.push({
+        canonical,
+        similar,
+        reason: 'Différence de casse uniquement (détection automatique)'
+      });
+    }
+  }
+
+  return suggestions;
+}
+
+/**
  * Analyze tags and moods for similarities
- * Sends ALL tags to Gemini for comprehensive analysis
+ * Combines automatic detection (case differences) with Gemini AI analysis
  */
 export async function analyzeSimilarMetadata(
   tags: Array<{ tag: string; count: number }>,
   moods: Array<{ mood: string; count: number }>
 ): Promise<CleanupSuggestions> {
   try {
-    const model = genAI.getGenerativeModel({ model: 'gemini-3-flash-preview' });
-
     console.log(`[Gemini] Analyzing ALL ${tags.length} tags and ${moods.length} moods`);
 
-    const prompt = `Analysez ces tags et ambiances (moods) et identifiez les groupes qui ont le même sens ou sont des variantes (synonymes, pluriel/singulier, langues différentes, fautes d'orthographe, etc.).
+    // Step 1: Automatic detection of case duplicates
+    const autoCaseTags = detectCaseDuplicates(tags.map(t => ({ tag: t.tag, count: t.count })));
+    const autoCaseMoods = detectCaseDuplicates(moods.map(m => ({ mood: m.mood, count: m.count })));
+    console.log(`[Auto] Detected ${autoCaseTags.length} case duplicate groups in tags, ${autoCaseMoods.length} in moods`);
+
+    // Step 2: Gemini analysis for semantic/linguistic similarities
+    const model = genAI.getGenerativeModel({ model: 'gemini-3-flash-preview' });
+
+    const prompt = `Analysez ces tags et ambiances (moods) et identifiez TOUS les groupes qui ont le même sens ou sont des variantes.
 
 TOUS LES TAGS (triés par popularité):
 ${tags.map(t => `- "${t.tag}" (${t.count} images)`).join('\n')}
@@ -220,10 +267,38 @@ ${tags.map(t => `- "${t.tag}" (${t.count} images)`).join('\n')}
 MOODS:
 ${moods.map(m => `- "${m.mood}" (${m.count} images)`).join('\n')}
 
-Pour chaque groupe de termes similaires :
-1. Choisissez le terme CANONICAL (le plus utilisé ou le plus clair)
-2. Listez les termes SIMILAIRES qui doivent être fusionnés avec lui
-3. Expliquez brièvement pourquoi ils sont similaires
+RÈGLES DE DÉTECTION - Fusionnez les termes dans ces cas :
+
+1. **Différence de casse** : "Détente" → "détente", "Paris" → "paris"
+2. **Pluriel/singulier** : "arbres" → "arbre", "enfants" → "enfant"
+3. **Tags en anglais avec équivalent français** :
+   - "contemplative" → "contemplation"
+   - "evening" → "soirée"
+   - "stillness" → "calme"
+   - "harmony" → "harmonie"
+   - "leader" → "chef" ou "meneur"
+   - "drinks" → "boisson"
+4. **Variantes nominales** : "vertical" → "verticalité", "introspection" → "introspectif"
+5. **Tags spécifiques vers généraux** : "banc public" → "banc", "architecture gothique" → "architecture"
+6. **Synonymes évidents** : "océan" ↔ "mer", "joie" ↔ "bonheur"
+7. **Accents/orthographe** : "mélancolie" ↔ "melancolie"
+
+EXEMPLES DE FUSIONS ATTENDUES :
+{
+  "canonical": "détente",
+  "similar": ["Détente"],
+  "reason": "Différence de casse uniquement"
+}
+{
+  "canonical": "contemplation",
+  "similar": ["contemplative"],
+  "reason": "Variante anglaise/adjectivale du même concept"
+}
+{
+  "canonical": "verticalité",
+  "similar": ["vertical"],
+  "reason": "Forme nominale et adjectivale du même concept"
+}
 
 Répondez UNIQUEMENT en JSON, sans texte avant ou après :
 {
@@ -243,12 +318,12 @@ Répondez UNIQUEMENT en JSON, sans texte avant ou après :
   ]
 }
 
-Notes importantes :
-- Cherchez surtout à fusionner les tags peu utilisés vers les tags populaires
-- Ne groupez que les termes vraiment similaires/synonymes
-- Préférez le terme le plus utilisé comme canonical
-- Si un terme est unique, ne le retournez pas
-- Soyez intelligent pour détecter : pluriel/singulier, accents, casse, langues, synonymes`;
+IMPORTANT :
+- Soyez EXHAUSTIF : cherchez toutes les variantes possibles
+- Préférez TOUJOURS le terme français au terme anglais
+- Préférez le terme le PLUS UTILISÉ comme canonical (sauf si anglais)
+- Fusionnez les tags à 1-2 usages vers les tags plus populaires quand c'est pertinent
+- Si un terme est unique ET sans équivalent, ne le retournez pas`;
 
     const result = await model.generateContent(prompt);
     const response = await result.response;
@@ -261,10 +336,20 @@ Notes importantes :
     }
 
     const parsed = JSON.parse(jsonMatch[0]);
+    const geminiTags = Array.isArray(parsed.tags) ? parsed.tags : [];
+    const geminiMoods = Array.isArray(parsed.moods) ? parsed.moods : [];
+
+    console.log(`[Gemini] AI detected ${geminiTags.length} tag groups, ${geminiMoods.length} mood groups`);
+
+    // Step 3: Combine automatic + AI results (auto results first for visibility)
+    const combinedTags = [...autoCaseTags, ...geminiTags];
+    const combinedMoods = [...autoCaseMoods, ...geminiMoods];
+
+    console.log(`[Combined] Total suggestions: ${combinedTags.length} tag groups, ${combinedMoods.length} mood groups`);
 
     return {
-      tags: Array.isArray(parsed.tags) ? parsed.tags : [],
-      moods: Array.isArray(parsed.moods) ? parsed.moods : []
+      tags: combinedTags,
+      moods: combinedMoods
     };
   } catch (error) {
     console.error('Gemini similarity analysis error:', error);
