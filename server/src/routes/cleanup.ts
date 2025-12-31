@@ -150,6 +150,116 @@ router.post('/apply-suggestions', async (req, res) => {
   }
 });
 
+// Fix tags with embedded count numbers
+router.post('/fix-embedded-counts', async (req, res) => {
+  try {
+    console.log('[Cleanup] Starting embedded count removal...');
+
+    const allImages = imageDb.getAll({ limit: 10000 }).images;
+    let totalImages = 0;
+    let imagesFixed = 0;
+    let totalTagsFixed = 0;
+    let totalMoodsFixed = 0;
+
+    /**
+     * Remove embedded count numbers from tag/mood
+     */
+    const sanitizeMetadataItem = (item: string): string => {
+      if (!item || typeof item !== 'string') return item;
+      return item
+        .replace(/\s*\d+\s*$/, '')           // Remove trailing numbers
+        .replace(/\s*\(\s*\d+\s*\)\s*$/, '') // Remove trailing (85)
+        .replace(/\s*\(\s*\d+\s+images?\s*\)\s*$/i, '') // Remove trailing (85 images)
+        .trim();
+    };
+
+    for (const img of allImages) {
+      let imageModified = false;
+      totalImages++;
+      const updates: any = {};
+
+      // Fix tags
+      if (img.tags) {
+        try {
+          const parsed = JSON.parse(img.tags);
+          if (Array.isArray(parsed)) {
+            let tagsModified = false;
+            const sanitized = parsed.map(tag => {
+              if (typeof tag === 'string') {
+                const cleaned = sanitizeMetadataItem(tag);
+                if (cleaned !== tag) {
+                  totalTagsFixed++;
+                  tagsModified = true;
+                  console.log(`[Cleanup] Tag: "${tag}" -> "${cleaned}"`);
+                }
+                return cleaned;
+              }
+              return tag;
+            });
+
+            if (tagsModified) {
+              updates.tags = JSON.stringify(sanitized);
+              imageModified = true;
+            }
+          }
+        } catch (e) {
+          console.error(`[Cleanup] Error processing tags for image ${img.id}:`, e);
+        }
+      }
+
+      // Fix moods
+      if (img.moods) {
+        try {
+          const parsed = JSON.parse(img.moods);
+          if (Array.isArray(parsed)) {
+            let moodsModified = false;
+            const sanitized = parsed.map(mood => {
+              if (typeof mood === 'string') {
+                const cleaned = sanitizeMetadataItem(mood);
+                if (cleaned !== mood) {
+                  totalMoodsFixed++;
+                  moodsModified = true;
+                  console.log(`[Cleanup] Mood: "${mood}" -> "${cleaned}"`);
+                }
+                return cleaned;
+              }
+              return mood;
+            });
+
+            if (moodsModified) {
+              updates.moods = JSON.stringify(sanitized);
+              imageModified = true;
+            }
+          }
+        } catch (e) {
+          console.error(`[Cleanup] Error processing moods for image ${img.id}:`, e);
+        }
+      }
+
+      // Apply all updates at once
+      if (imageModified) {
+        imageDb.update(img.id, updates);
+        imagesFixed++;
+      }
+    }
+
+    res.json({
+      success: true,
+      stats: {
+        totalImages,
+        imagesFixed,
+        totalTagsFixed,
+        totalMoodsFixed,
+        cleanImages: totalImages - imagesFixed
+      },
+      message: `Fixed ${imagesFixed} images, cleaned ${totalTagsFixed} tags and ${totalMoodsFixed} moods`
+    });
+  } catch (error) {
+    console.error('Fix embedded counts error:', error);
+    res.status(500).json({ error: 'Failed to fix embedded counts' });
+  }
+});
+
 // Fix duplicate tags in all images
 router.post('/fix-duplicate-tags', async (req, res) => {
   try {
