@@ -562,7 +562,7 @@ export const imageDb = {
 
       return Array.from(tagCounts.entries())
         .map(([tag, count]) => ({ tag, count }))
-        .sort((a, b) => b.count - a.count);
+        .sort((a, b) => a.tag.localeCompare(b.tag));
     } catch (error) {
       console.error('Error in getTagsWithCounts:', error);
       return [];
@@ -576,7 +576,7 @@ export const imageDb = {
         FROM images
         WHERE mood IS NOT NULL AND mood != ''
         GROUP BY mood
-        ORDER BY count DESC
+        ORDER BY mood ASC
       `).all() as Array<{ mood: string; count: number }>;
 
       return moods;
