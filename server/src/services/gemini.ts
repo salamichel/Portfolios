@@ -1,8 +1,106 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import fs from 'fs';
 import path from 'path';
+import { imageDb } from '../database.js';
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
+
+/**
+ * Get existing popular tags to encourage reuse
+ */
+function getPopularTags(limit: number = 50): string[] {
+  try {
+    const tagsWithCounts = imageDb.getTagsWithCounts();
+    return tagsWithCounts
+      .sort((a, b) => b.count - a.count) // Sort by count descending
+      .slice(0, limit)
+      .map(t => t.tag);
+  } catch (error) {
+    console.error('Failed to get popular tags:', error);
+    return [];
+  }
+}
+
+/**
+ * Get existing popular moods to encourage reuse
+ */
+function getPopularMoods(limit: number = 20): string[] {
+  try {
+    const moodsWithCounts = imageDb.getMoodsWithCounts();
+    return moodsWithCounts
+      .sort((a, b) => b.count - a.count) // Sort by count descending
+      .slice(0, limit)
+      .map(m => m.mood);
+  } catch (error) {
+    console.error('Failed to get popular moods:', error);
+    return [];
+  }
+}
+
+/**
+ * Normalize a tag by matching it to existing popular tags
+ * Rules:
+ * - Case-insensitive matching
+ * - Remove accents for comparison
+ * - Prefer existing tag if very similar
+ */
+function normalizeTag(tag: string, popularTags: string[]): string {
+  if (!tag || typeof tag !== 'string') return tag;
+
+  const normalized = tag.trim();
+  const normalizedLower = normalized.toLowerCase();
+  const removeAccents = (str: string) =>
+    str.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const normalizedNoAccent = removeAccents(normalizedLower);
+
+  // Exact match (case-insensitive)
+  const exactMatch = popularTags.find(t => t.toLowerCase() === normalizedLower);
+  if (exactMatch) return exactMatch;
+
+  // Match without accents
+  const accentMatch = popularTags.find(t =>
+    removeAccents(t.toLowerCase()) === normalizedNoAccent
+  );
+  if (accentMatch) return accentMatch;
+
+  // No match found - return original (preserving original casing)
+  return normalized;
+}
+
+/**
+ * Normalize mood by matching to existing popular moods
+ */
+function normalizeMood(mood: string, popularMoods: string[]): string {
+  if (!mood || typeof mood !== 'string') return mood;
+
+  const normalized = mood.trim();
+  const normalizedLower = normalized.toLowerCase();
+
+  // Exact match (case-insensitive)
+  const exactMatch = popularMoods.find(m => m.toLowerCase() === normalizedLower);
+  if (exactMatch) return exactMatch;
+
+  return normalized;
+}
+
+/**
+ * Normalize tags array by mapping to existing popular tags
+ */
+function normalizeTags(tags: string[], popularTags: string[]): string[] {
+  if (!Array.isArray(tags)) return tags;
+
+  // Normalize each tag
+  const normalized = tags.map(tag => normalizeTag(tag, popularTags));
+
+  // Remove duplicates (case-insensitive)
+  const seen = new Set<string>();
+  return normalized.filter(tag => {
+    const lower = tag.toLowerCase();
+    if (seen.has(lower)) return false;
+    seen.add(lower);
+    return true;
+  });
+}
 
 export interface ImageAnalysis {
   title: string;
@@ -28,11 +126,30 @@ export async function analyzeImage(imagePath: string): Promise<ImageAnalysis> {
     const base64Image = imageBuffer.toString('base64');
     const mimeType = getMimeType(imagePath);
 
+    // Get existing popular tags and moods to encourage reuse
+    const popularTags = getPopularTags(50);
+    const popularMoods = getPopularMoods(20);
+
+    // Build tag suggestions for prompt
+    const tagSuggestions = popularTags.length > 0
+      ? `\n\nTAGS EXISTANTS POPULAIRES (à réutiliser en priorité si pertinent) :\n${popularTags.join(', ')}`
+      : '';
+
+    const moodSuggestions = popularMoods.length > 0
+      ? `\n\nMOODS EXISTANTS (à réutiliser en priorité si pertinent) :\n${popularMoods.join(', ')}`
+      : '';
+
     const prompt = `Analysez cette image artistique/photographie et fournissez :
 1. Un titre créatif et évocateur (max 10 mots)
 2. Une description artistique qui capture l'ambiance, la composition et les éléments artistiques (2 à 3 phrases)
 3. Des mots-clés pertinents pour la catégorisation (5 à 10 tags)
-4. L'ambiance/atmosphère générale (un ou deux mots comme « serein », « dramatique », « mélancolique », etc.)
+4. L'ambiance/atmosphère générale (un ou deux mots comme « serein », « dramatique », « mélancolique », etc.)${tagSuggestions}${moodSuggestions}
+
+IMPORTANT :
+- Pour les tags ET moods : RÉUTILISEZ en priorité les termes de la liste ci-dessus s'ils sont pertinents
+- Cela permet de mieux organiser et regrouper les images similaires
+- Ne créez un nouveau tag/mood que si aucun terme existant ne convient
+- Utilisez exactement la même casse que dans la liste (ex: "architecture" pas "Architecture")
 
 Respond in JSON format exactly like this:
 {
@@ -63,11 +180,16 @@ Respond in JSON format exactly like this:
 
     const parsed = JSON.parse(jsonMatch[0]);
 
+    // Normalize tags and mood against existing popular ones
+    const rawTags = Array.isArray(parsed.tags) ? parsed.tags : [];
+    const normalizedTagsArray = normalizeTags(rawTags, popularTags);
+    const normalizedMood = normalizeMood(parsed.mood || 'undefined', popularMoods);
+
     return {
       title: parsed.title || 'Untitled',
       description: parsed.description || '',
-      tags: Array.isArray(parsed.tags) ? parsed.tags : [],
-      mood: parsed.mood || 'undefined'
+      tags: normalizedTagsArray,
+      mood: normalizedMood
     };
   } catch (error) {
     console.error('Gemini analysis error:', error);
@@ -93,6 +215,19 @@ export async function analyzeImagesBatch(imagePaths: string[]): Promise<ImageAna
 
     const model = genAI.getGenerativeModel({ model: 'gemini-3-flash-preview' });
 
+    // Get existing popular tags and moods to encourage reuse across all images
+    const popularTags = getPopularTags(50);
+    const popularMoods = getPopularMoods(20);
+
+    // Build tag/mood suggestions for prompt
+    const tagSuggestions = popularTags.length > 0
+      ? `\n\nTAGS EXISTANTS POPULAIRES (à réutiliser en priorité si pertinent pour chaque image) :\n${popularTags.join(', ')}`
+      : '';
+
+    const moodSuggestions = popularMoods.length > 0
+      ? `\n\nMOODS EXISTANTS (à réutiliser en priorité si pertinent) :\n${popularMoods.join(', ')}`
+      : '';
+
     // Prepare all images
     const imageData = imagePaths.map(imagePath => {
       const imageBuffer = fs.readFileSync(imagePath);
@@ -105,9 +240,14 @@ export async function analyzeImagesBatch(imagePaths: string[]): Promise<ImageAna
 1. Un titre créatif et évocateur (max 10 mots)
 2. Une description artistique qui capture l'ambiance, la composition et les éléments artistiques (2 à 3 phrases)
 3. Des mots-clés pertinents pour la catégorisation (5 à 10 tags)
-4. L'ambiance/atmosphère générale (un ou deux mots comme « serein », « dramatique », « mélancolique », etc.)
+4. L'ambiance/atmosphère générale (un ou deux mots comme « serein », « dramatique », « mélancolique », etc.)${tagSuggestions}${moodSuggestions}
 
-IMPORTANT : Retournez un tableau JSON avec exactement ${imagePaths.length} éléments, dans le MÊME ORDRE que les images fournies.
+IMPORTANT :
+- Pour CHAQUE image : RÉUTILISEZ en priorité les tags/moods de la liste ci-dessus s'ils sont pertinents
+- Cela permet de mieux organiser et regrouper les images similaires
+- Ne créez un nouveau tag/mood que si aucun terme existant ne convient
+- Utilisez exactement la même casse que dans la liste (ex: "architecture" pas "Architecture")
+- Retournez un tableau JSON avec exactement ${imagePaths.length} éléments, dans le MÊME ORDRE que les images fournies
 
 Respond in JSON format exactly like this:
 [
@@ -159,12 +299,19 @@ Respond in JSON format exactly like this:
       throw new Error(`Expected ${imagePaths.length} analyses, got ${Array.isArray(parsed) ? parsed.length : 'non-array'}`);
     }
 
-    const analyses = parsed.map(item => ({
-      title: item.title || 'Untitled',
-      description: item.description || '',
-      tags: Array.isArray(item.tags) ? item.tags : [],
-      mood: item.mood || 'undefined'
-    }));
+    // Normalize tags and moods for each analysis
+    const analyses = parsed.map(item => {
+      const rawTags = Array.isArray(item.tags) ? item.tags : [];
+      const normalizedTagsArray = normalizeTags(rawTags, popularTags);
+      const normalizedMood = normalizeMood(item.mood || 'undefined', popularMoods);
+
+      return {
+        title: item.title || 'Untitled',
+        description: item.description || '',
+        tags: normalizedTagsArray,
+        mood: normalizedMood
+      };
+    });
 
     return {
       analyses,
