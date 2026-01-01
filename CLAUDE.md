@@ -40,7 +40,8 @@ Portfolios/
 │   │   │   ├── themes.ts      # CRUD thèmes
 │   │   │   ├── books.ts       # CRUD livres et pages
 │   │   │   ├── templates.ts   # Templates de mise en page
-│   │   │   └── cleanup.ts     # Nettoyage tags/moods
+│   │   │   ├── cleanup.ts     # Nettoyage tags/moods
+│   │   │   └── enrichment-configs.ts  # Configuration IA enrichissement
 │   │   └── services/          # Logique métier
 │   │       ├── gemini.ts      # Intégration Gemini AI
 │   │       └── bookLayoutAI.ts # Suggestions mise en page IA
@@ -67,6 +68,12 @@ Portfolios/
 1. `server/src/services/gemini.ts` - Appels API Gemini
 2. `.env` - Variables `GEMINI_API_KEY`, `GEMINI_BOOK_API_KEY`
 
+### Configurer l'enrichissement IA
+1. `server/src/routes/enrichment-configs.ts` - CRUD configurations
+2. `server/src/database.ts` - `enrichmentConfigDb` fonctions
+3. `client/src/pages/EnrichmentConfigAdmin.tsx` - UI configuration
+4. Accès via `/admin/enrichment` ou icône CPU dans le header
+
 ### Modifier la galerie d'images
 1. `client/src/components/ImageGallery.tsx` - Composant principal (40KB)
 2. `client/src/components/Header.tsx` - Contrôles recherche/filtres
@@ -82,10 +89,11 @@ Portfolios/
 | Table | Description |
 |-------|-------------|
 | `themes` | Collections/catégories de portfolio |
-| `images` | Métadonnées images + flags enrichissement IA |
+| `images` | Métadonnées images + flags enrichissement IA + enrichment_config_id |
 | `books` | Projets de livres (draft → published) |
 | `book_pages` | Pages double avec layout slots |
 | `page_templates` | Templates prédéfinis et personnalisés |
+| `enrichment_configs` | Configurations IA (prompts, modèles Gemini) |
 
 ## Patterns architecturaux
 
@@ -99,8 +107,9 @@ const images = await api.get('/api/images');
 ### Database ORM (backend)
 ```typescript
 // server/src/database.ts
-import { imageDb, themeDb, bookDb, templateDb } from './database';
+import { imageDb, themeDb, bookDb, templateDb, enrichmentConfigDb } from './database';
 const image = imageDb.getById(id);
+const defaultConfig = enrichmentConfigDb.getDefault();
 ```
 
 ### Services (logique métier)
@@ -140,7 +149,8 @@ npm run build            # Build client + server
 | `ImageGallery.tsx` | 40KB | Galerie avec pagination, filtres, édition inline |
 | `BookEditor.tsx` | 31KB | Création/édition de livres complets |
 | `bookLayoutAI.ts` | 44KB | Moteur de suggestions IA pour layouts |
-| `database.ts` | ~15KB | Schéma complet + toutes les fonctions CRUD |
+| `database.ts` | ~20KB | Schéma complet + toutes les fonctions CRUD |
+| `EnrichmentConfigAdmin.tsx` | ~10KB | Page admin configuration IA |
 
 ## Notes de développement
 

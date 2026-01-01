@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { Theme, Image, PaginatedImages, Book, BookPage, PageTemplate, PageData, BookLayoutSuggestions, LayoutSuggestion, TagWithCount, MoodWithCount } from '../types';
+import type { Theme, Image, PaginatedImages, Book, BookPage, PageTemplate, PageData, BookLayoutSuggestions, LayoutSuggestion, TagWithCount, MoodWithCount, EnrichmentConfig, GeminiModel } from '../types';
 
 const api = axios.create({
   baseURL: '/api'
@@ -57,16 +57,24 @@ export const imagesApi = {
     }).then(res => res.data);
   },
 
-  enrich: (id: string) => api.post<Image>(`/images/${id}/enrich`).then(res => res.data),
+  enrich: (id: string, configId?: string) =>
+    api.post<Image>(`/images/${id}/enrich`, { config_id: configId }).then(res => res.data),
 
   getUnenriched: () => api.get<{ images: Image[]; count: number }>('/images/unenriched').then(res => res.data),
 
-  batchEnrich: (imageIds: string[]) => api.post<{
+  batchEnrich: (imageIds: string[], configId?: string) => api.post<{
     total: number;
     successful: number;
     failed: number;
     errors: Array<{ id: string; error: string }>;
-  }>('/images/batch-enrich', { image_ids: imageIds }).then(res => res.data),
+    report_id?: string;
+  }>('/images/batch-enrich', { image_ids: imageIds, config_id: configId }).then(res => res.data),
+
+  enrichAll: () => api.post<{
+    message: string;
+    total: number;
+    image_ids: string[];
+  }>('/images/enrich-all').then(res => res.data),
 
   update: (id: string, data: Partial<Image>) =>
     api.put<Image>(`/images/${id}`, data).then(res => res.data),
@@ -187,4 +195,25 @@ export const cleanupApi = {
 
   applySuggestions: (tagMerges: SimilarityGroup[], moodMerges: SimilarityGroup[]) =>
     api.post<{ success: boolean; results: any; message: string }>('/cleanup/apply-suggestions', { tagMerges, moodMerges }).then(res => res.data)
+};
+
+// Enrichment Configs API
+export const enrichmentConfigsApi = {
+  getAll: () => api.get<EnrichmentConfig[]>('/enrichment-configs').then(res => res.data),
+
+  getById: (id: string) => api.get<EnrichmentConfig>(`/enrichment-configs/${id}`).then(res => res.data),
+
+  getDefault: () => api.get<EnrichmentConfig>('/enrichment-configs/default').then(res => res.data),
+
+  getModels: () => api.get<GeminiModel[]>('/enrichment-configs/models').then(res => res.data),
+
+  create: (data: { name: string; prompt: string; model: GeminiModel; is_default?: boolean }) =>
+    api.post<EnrichmentConfig>('/enrichment-configs', data).then(res => res.data),
+
+  update: (id: string, data: Partial<{ name: string; prompt: string; model: GeminiModel; is_default: boolean }>) =>
+    api.put<EnrichmentConfig>(`/enrichment-configs/${id}`, data).then(res => res.data),
+
+  delete: (id: string) => api.delete(`/enrichment-configs/${id}`),
+
+  setDefault: (id: string) => api.post<EnrichmentConfig>(`/enrichment-configs/${id}/set-default`).then(res => res.data)
 };

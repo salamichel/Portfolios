@@ -245,6 +245,7 @@ router.post('/upload', upload.array('images', 50), async (req, res) => {
 // Enrich image with Gemini
 router.post('/:id/enrich', async (req, res) => {
   try {
+    const { config_id } = req.body;
     const image = imageDb.getById(req.params.id);
     if (!image) {
       return res.status(404).json({ error: 'Image not found' });
@@ -257,14 +258,15 @@ router.post('/:id/enrich', async (req, res) => {
     // Use WebP version for Gemini (TIFF not supported, and original may be deleted)
     const baseName = path.basename(image.filename, path.extname(image.filename));
     const webpPath = path.join(optimizedDir, `${baseName}.webp`);
-    const analysis = await analyzeImage(webpPath);
+    const analysis = await analyzeImage(webpPath, config_id);
 
     const updatedImage = imageDb.update(req.params.id, {
       title: analysis.title,
       description: analysis.description,
       tags: JSON.stringify(analysis.tags),
       mood: analysis.mood,
-      ai_enriched: true
+      ai_enriched: true,
+      enrichment_config_id: analysis.configId
     });
 
     res.json(updatedImage);
@@ -276,7 +278,7 @@ router.post('/:id/enrich', async (req, res) => {
 
 // Batch enrich multiple images with Gemini (TRUE batch: 1 API call for up to 75 images)
 router.post('/batch-enrich', async (req, res) => {
-  const { image_ids } = req.body;
+  const { image_ids, config_id } = req.body;
   let tracker: ImageEnrichmentReportTracker | null = null;
 
   try {
@@ -339,7 +341,7 @@ router.post('/batch-enrich', async (req, res) => {
         // Call Gemini ONCE with all images in the batch - TRACK API CALL
         const callStartTime = Date.now();
         const imagePaths = batchData.map(item => item.webpPath);
-        const { analyses, usageMetadata } = await analyzeImagesBatch(imagePaths);
+        const { analyses, configId, usageMetadata } = await analyzeImagesBatch(imagePaths, config_id);
         const callDuration = Date.now() - callStartTime;
 
         // Track successful API call
@@ -374,7 +376,8 @@ router.post('/batch-enrich', async (req, res) => {
               description: analysis.description,
               tags: JSON.stringify(analysis.tags),
               mood: analysis.mood,
-              ai_enriched: true
+              ai_enriched: true,
+              enrichment_config_id: configId
             });
             results.successful++;
           } catch (updateError) {
@@ -414,6 +417,35 @@ router.post('/batch-enrich', async (req, res) => {
     }
 
     res.status(500).json({ error: 'Failed to batch enrich images' });
+  }
+});
+
+// Enrich all images (re-enrichment)
+router.post('/enrich-all', async (req, res) => {
+  const { config_id } = req.body;
+
+  try {
+    if (!process.env.GEMINI_API_KEY) {
+      return res.status(400).json({ error: 'Gemini API key not configured' });
+    }
+
+    // Get all images
+    const { images } = imageDb.getAll({ limit: 10000 });
+    const imageIds = images.map(img => img.id);
+
+    if (imageIds.length === 0) {
+      return res.json({ total: 0, message: 'No images to enrich' });
+    }
+
+    // Return immediately with info, enrichment will happen via batch-enrich
+    res.json({
+      message: 'Use batch-enrich with these image IDs',
+      total: imageIds.length,
+      image_ids: imageIds
+    });
+  } catch (error) {
+    console.error('Enrich-all error:', error);
+    res.status(500).json({ error: 'Failed to get images for enrichment' });
   }
 });
 

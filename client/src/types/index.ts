@@ -20,6 +20,7 @@ export interface Image {
   tags: string | null;
   mood: string | null;
   ai_enriched: boolean;
+  enrichment_config_id: string | null;
   width: number | null;
   height: number | null;
   size: number;
@@ -166,4 +167,16 @@ export interface BookLayoutSuggestions {
   suggestions: LayoutSuggestion[];
   total_pages: number;
   reasoning: string;
+}
+
+export type GeminiModel = 'gemini-3-flash-preview' | 'gemini-2.5-pro' | 'gemini-2.5-flash' | 'gemini-3-pro-preview';
+
+export interface EnrichmentConfig {
+  id: string;
+  name: string;
+  prompt: string;
+  model: GeminiModel;
+  is_default: boolean;
+  created_at: string;
+  updated_at: string;
 }
