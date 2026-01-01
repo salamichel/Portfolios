@@ -141,6 +141,19 @@ db.exec(`
 
   CREATE INDEX IF NOT EXISTS idx_enrichment_reports_status ON image_enrichment_reports(status);
   CREATE INDEX IF NOT EXISTS idx_enrichment_reports_started ON image_enrichment_reports(started_at);
+
+  -- Enrichment configurations (prompts and models for AI enrichment)
+  CREATE TABLE IF NOT EXISTS enrichment_configs (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    prompt TEXT NOT NULL,
+    model TEXT NOT NULL DEFAULT 'gemini-3-flash-preview',
+    is_default BOOLEAN DEFAULT FALSE,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_enrichment_configs_default ON enrichment_configs(is_default);
 `);
 
 // Migration: Add position column if it doesn't exist (for existing databases)
@@ -175,6 +188,13 @@ try {
   // Column already exists, ignore error
 }
 
+// Migration: Add enrichment_config_id to images table
+try {
+  db.exec(`ALTER TABLE images ADD COLUMN enrichment_config_id TEXT REFERENCES enrichment_configs(id) ON DELETE SET NULL`);
+} catch {
+  // Column already exists, ignore error
+}
+
 // Migration: Add status column to books if it doesn't exist
 try {
   db.exec(`ALTER TABLE books ADD COLUMN status TEXT DEFAULT 'draft'`);
@@ -203,10 +223,23 @@ export interface Image {
   tags: string | null;
   mood: string | null;
   ai_enriched: boolean;
+  enrichment_config_id: string | null;
   width: number | null;
   height: number | null;
   size: number;
   mime_type: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export type GeminiModel = 'gemini-3-flash-preview' | 'gemini-2.5-pro' | 'gemini-2.5-flash' | 'gemini-3-pro-preview';
+
+export interface EnrichmentConfig {
+  id: string;
+  name: string;
+  prompt: string;
+  model: GeminiModel;
+  is_default: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -504,6 +537,7 @@ export const imageDb = {
     if (data.tags !== undefined) { fields.push('tags = ?'); values.push(data.tags); }
     if (data.mood !== undefined) { fields.push('mood = ?'); values.push(data.mood); }
     if (data.ai_enriched !== undefined) { fields.push('ai_enriched = ?'); values.push(data.ai_enriched ? 1 : 0); }
+    if (data.enrichment_config_id !== undefined) { fields.push('enrichment_config_id = ?'); values.push(data.enrichment_config_id); }
 
     if (fields.length === 0) return this.getById(id);
 
@@ -1437,7 +1471,132 @@ export const enrichmentReportDb = {
   }
 };
 
+// Enrichment config operations
+export const enrichmentConfigDb = {
+  getAll(): EnrichmentConfig[] {
+    const configs = db.prepare('SELECT * FROM enrichment_configs ORDER BY is_default DESC, name').all() as any[];
+    return configs.map(c => ({
+      ...c,
+      is_default: Boolean(c.is_default)
+    }));
+  },
+
+  getById(id: string): EnrichmentConfig | undefined {
+    const config = db.prepare('SELECT * FROM enrichment_configs WHERE id = ?').get(id) as any;
+    if (!config) return undefined;
+    return {
+      ...config,
+      is_default: Boolean(config.is_default)
+    };
+  },
+
+  getDefault(): EnrichmentConfig | undefined {
+    const config = db.prepare('SELECT * FROM enrichment_configs WHERE is_default = 1 LIMIT 1').get() as any;
+    if (!config) return undefined;
+    return {
+      ...config,
+      is_default: Boolean(config.is_default)
+    };
+  },
+
+  create(config: Omit<EnrichmentConfig, 'created_at' | 'updated_at'>): EnrichmentConfig {
+    // If this is set as default, unset other defaults first
+    if (config.is_default) {
+      db.prepare('UPDATE enrichment_configs SET is_default = 0').run();
+    }
+
+    db.prepare(`
+      INSERT INTO enrichment_configs (id, name, prompt, model, is_default)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(
+      config.id,
+      config.name,
+      config.prompt,
+      config.model,
+      config.is_default ? 1 : 0
+    );
+    return this.getById(config.id)!;
+  },
+
+  update(id: string, data: Partial<Omit<EnrichmentConfig, 'id' | 'created_at' | 'updated_at'>>): EnrichmentConfig | undefined {
+    // If setting as default, unset other defaults first
+    if (data.is_default === true) {
+      db.prepare('UPDATE enrichment_configs SET is_default = 0 WHERE id != ?').run(id);
+    }
+
+    const fields: string[] = [];
+    const values: any[] = [];
+
+    if (data.name !== undefined) { fields.push('name = ?'); values.push(data.name); }
+    if (data.prompt !== undefined) { fields.push('prompt = ?'); values.push(data.prompt); }
+    if (data.model !== undefined) { fields.push('model = ?'); values.push(data.model); }
+    if (data.is_default !== undefined) { fields.push('is_default = ?'); values.push(data.is_default ? 1 : 0); }
+
+    if (fields.length === 0) return this.getById(id);
+
+    fields.push('updated_at = CURRENT_TIMESTAMP');
+    values.push(id);
+
+    db.prepare(`UPDATE enrichment_configs SET ${fields.join(', ')} WHERE id = ?`).run(...values);
+    return this.getById(id);
+  },
+
+  delete(id: string): boolean {
+    // Don't delete if it's the only config
+    const count = db.prepare('SELECT COUNT(*) as count FROM enrichment_configs').get() as { count: number };
+    if (count.count <= 1) return false;
+
+    const config = this.getById(id);
+    const result = db.prepare('DELETE FROM enrichment_configs WHERE id = ?').run(id);
+
+    // If deleted config was default, set another as default
+    if (result.changes > 0 && config?.is_default) {
+      const first = db.prepare('SELECT id FROM enrichment_configs LIMIT 1').get() as { id: string } | undefined;
+      if (first) {
+        db.prepare('UPDATE enrichment_configs SET is_default = 1 WHERE id = ?').run(first.id);
+      }
+    }
+
+    return result.changes > 0;
+  },
+
+  setDefault(id: string): EnrichmentConfig | undefined {
+    db.prepare('UPDATE enrichment_configs SET is_default = 0').run();
+    db.prepare('UPDATE enrichment_configs SET is_default = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(id);
+    return this.getById(id);
+  },
+
+  initDefault(): void {
+    const existing = db.prepare('SELECT COUNT(*) as count FROM enrichment_configs').get() as { count: number };
+    if (existing.count > 0) return;
+
+    // Create default prompt with current behavior
+    const defaultPrompt = `Analysez cette image artistique/photographie et fournissez :
+1. Un titre créatif et évocateur (max 10 mots)
+2. Une description artistique qui capture l'ambiance, la composition et les éléments artistiques (2 à 3 phrases)
+3. Des mots-clés pertinents pour la catégorisation (5 à 10 tags)
+4. L'ambiance/atmosphère générale (un ou deux mots comme « serein », « dramatique », « mélancolique », etc.)
+
+IMPORTANT :
+- Pour les tags ET moods : RÉUTILISEZ en priorité les termes de la liste ci-dessus s'ils sont pertinents
+- Cela permet de mieux organiser et regrouper les images similaires
+- Ne créez un nouveau tag/mood que si aucun terme existant ne convient
+- Utilisez exactement la même casse que dans la liste (ex: "architecture" pas "Architecture")`;
+
+    this.create({
+      id: 'default-config',
+      name: 'Configuration par défaut',
+      prompt: defaultPrompt,
+      model: 'gemini-3-flash-preview',
+      is_default: true
+    });
+  }
+};
+
 // Initialize predefined templates
 templateDb.initPredefined();
+
+// Initialize default enrichment config
+enrichmentConfigDb.initDefault();
 
 export default db;

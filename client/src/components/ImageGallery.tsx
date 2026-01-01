@@ -356,7 +356,11 @@ export function ImageGallery({ themeId, themes, searchQuery, onImageUpdate }: Im
       {/* Advanced filters - always visible */}
       <div className="mb-4 p-4 bg-gray-800 rounded-lg space-y-3">
         {/* Batch Enrich Button */}
-        <BatchEnrichButton onComplete={() => loadImages(true)} />
+        <BatchEnrichButton
+          onComplete={() => loadImages(true)}
+          selectedImageIds={Array.from(selectedImages)}
+          totalImageCount={total}
+        />
 
         <div className="flex flex-wrap gap-3">
           {/* Tag filter */}

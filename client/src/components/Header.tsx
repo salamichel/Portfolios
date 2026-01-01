@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Search, Upload, X, Camera, Settings, BookOpen, Sparkles } from 'lucide-react';
+import { Search, Upload, X, Camera, Settings, BookOpen, Sparkles, Cpu } from 'lucide-react';
 
 interface HeaderProps {
   searchQuery: string;
@@ -67,6 +67,14 @@ export function Header({ searchQuery, onSearchChange, onUploadClick }: HeaderPro
             title="Nettoyer tags et ambiances"
           >
             <Sparkles className="w-5 h-5" />
+          </Link>
+
+          <Link
+            to="/admin/enrichment"
+            className="p-2 hover:bg-gray-800 rounded-lg transition-colors"
+            title="Configuration IA"
+          >
+            <Cpu className="w-5 h-5" />
           </Link>
 
           <Link

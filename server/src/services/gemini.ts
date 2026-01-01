@@ -1,7 +1,7 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import fs from 'fs';
 import path from 'path';
-import { imageDb } from '../database.js';
+import { imageDb, enrichmentConfigDb, EnrichmentConfig, GeminiModel } from '../database.js';
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 
@@ -109,8 +109,13 @@ export interface ImageAnalysis {
   mood: string;
 }
 
+export interface ImageAnalysisResult extends ImageAnalysis {
+  configId: string;
+}
+
 export interface ImageAnalysisBatchResult {
   analyses: ImageAnalysis[];
+  configId: string;
   usageMetadata?: {
     promptTokenCount: number;
     candidatesTokenCount: number;
@@ -118,9 +123,41 @@ export interface ImageAnalysisBatchResult {
   };
 }
 
-export async function analyzeImage(imagePath: string): Promise<ImageAnalysis> {
+/**
+ * Build the complete prompt with tag/mood suggestions
+ */
+function buildPrompt(basePrompt: string, popularTags: string[], popularMoods: string[]): string {
+  const tagSuggestions = popularTags.length > 0
+    ? `\n\nTAGS EXISTANTS POPULAIRES (à réutiliser en priorité si pertinent) :\n${popularTags.join(', ')}`
+    : '';
+
+  const moodSuggestions = popularMoods.length > 0
+    ? `\n\nMOODS EXISTANTS (à réutiliser en priorité si pertinent) :\n${popularMoods.join(', ')}`
+    : '';
+
+  return `${basePrompt}${tagSuggestions}${moodSuggestions}
+
+Respond in JSON format exactly like this:
+{
+  "title": "...",
+  "description": "...",
+  "tags": ["tag1", "tag2", ...],
+  "mood": "..."
+}`;
+}
+
+export async function analyzeImage(imagePath: string, configId?: string): Promise<ImageAnalysisResult> {
   try {
-    const model = genAI.getGenerativeModel({ model: 'gemini-3-flash-preview' });
+    // Get the config (specified or default)
+    const config = configId
+      ? enrichmentConfigDb.getById(configId)
+      : enrichmentConfigDb.getDefault();
+
+    if (!config) {
+      throw new Error('No enrichment config found');
+    }
+
+    const model = genAI.getGenerativeModel({ model: config.model });
 
     const imageBuffer = fs.readFileSync(imagePath);
     const base64Image = imageBuffer.toString('base64');
@@ -130,34 +167,7 @@ export async function analyzeImage(imagePath: string): Promise<ImageAnalysis> {
     const popularTags = getPopularTags(50);
     const popularMoods = getPopularMoods(20);
 
-    // Build tag suggestions for prompt
-    const tagSuggestions = popularTags.length > 0
-      ? `\n\nTAGS EXISTANTS POPULAIRES (à réutiliser en priorité si pertinent) :\n${popularTags.join(', ')}`
-      : '';
-
-    const moodSuggestions = popularMoods.length > 0
-      ? `\n\nMOODS EXISTANTS (à réutiliser en priorité si pertinent) :\n${popularMoods.join(', ')}`
-      : '';
-
-    const prompt = `Analysez cette image artistique/photographie et fournissez :
-1. Un titre créatif et évocateur (max 10 mots)
-2. Une description artistique qui capture l'ambiance, la composition et les éléments artistiques (2 à 3 phrases)
-3. Des mots-clés pertinents pour la catégorisation (5 à 10 tags)
-4. L'ambiance/atmosphère générale (un ou deux mots comme « serein », « dramatique », « mélancolique », etc.)${tagSuggestions}${moodSuggestions}
-
-IMPORTANT :
-- Pour les tags ET moods : RÉUTILISEZ en priorité les termes de la liste ci-dessus s'ils sont pertinents
-- Cela permet de mieux organiser et regrouper les images similaires
-- Ne créez un nouveau tag/mood que si aucun terme existant ne convient
-- Utilisez exactement la même casse que dans la liste (ex: "architecture" pas "Architecture")
-
-Respond in JSON format exactly like this:
-{
-  "title": "...",
-  "description": "...",
-  "tags": ["tag1", "tag2", ...],
-  "mood": "..."
-}`;
+    const prompt = buildPrompt(config.prompt, popularTags, popularMoods);
 
     const result = await model.generateContent([
       { text: prompt },
@@ -189,7 +199,8 @@ Respond in JSON format exactly like this:
       title: parsed.title || 'Untitled',
       description: parsed.description || '',
       tags: normalizedTagsArray,
-      mood: normalizedMood
+      mood: normalizedMood,
+      configId: config.id
     };
   } catch (error) {
     console.error('Gemini analysis error:', error);
@@ -198,56 +209,26 @@ Respond in JSON format exactly like this:
 }
 
 /**
- * Analyze multiple images in a single Gemini API call (up to 75 images)
- * Much more efficient than calling analyzeImage() multiple times
- * Returns analyses AND usage metadata for API call tracking
+ * Build the batch prompt with tag/mood suggestions
  */
-export async function analyzeImagesBatch(imagePaths: string[]): Promise<ImageAnalysisBatchResult> {
-  try {
-    if (imagePaths.length === 0) {
-      return { analyses: [] };
-    }
+function buildBatchPrompt(basePrompt: string, imageCount: number, popularTags: string[], popularMoods: string[]): string {
+  const tagSuggestions = popularTags.length > 0
+    ? `\n\nTAGS EXISTANTS POPULAIRES (à réutiliser en priorité si pertinent pour chaque image) :\n${popularTags.join(', ')}`
+    : '';
 
-    // Gemini 3 Flash has 1M token context - 75 images uses ~150-300k tokens (safe margin)
-    if (imagePaths.length > 75) {
-      throw new Error('Cannot analyze more than 75 images in a single batch');
-    }
+  const moodSuggestions = popularMoods.length > 0
+    ? `\n\nMOODS EXISTANTS (à réutiliser en priorité si pertinent) :\n${popularMoods.join(', ')}`
+    : '';
 
-    const model = genAI.getGenerativeModel({ model: 'gemini-3-flash-preview' });
-
-    // Get existing popular tags and moods to encourage reuse across all images
-    const popularTags = getPopularTags(50);
-    const popularMoods = getPopularMoods(20);
-
-    // Build tag/mood suggestions for prompt
-    const tagSuggestions = popularTags.length > 0
-      ? `\n\nTAGS EXISTANTS POPULAIRES (à réutiliser en priorité si pertinent pour chaque image) :\n${popularTags.join(', ')}`
-      : '';
-
-    const moodSuggestions = popularMoods.length > 0
-      ? `\n\nMOODS EXISTANTS (à réutiliser en priorité si pertinent) :\n${popularMoods.join(', ')}`
-      : '';
-
-    // Prepare all images
-    const imageData = imagePaths.map(imagePath => {
-      const imageBuffer = fs.readFileSync(imagePath);
-      const base64Image = imageBuffer.toString('base64');
-      const mimeType = getMimeType(imagePath);
-      return { mimeType, data: base64Image };
-    });
-
-    const prompt = `Analysez chacune des ${imagePaths.length} images artistiques/photographies fournies et pour CHAQUE image, fournissez :
-1. Un titre créatif et évocateur (max 10 mots)
-2. Une description artistique qui capture l'ambiance, la composition et les éléments artistiques (2 à 3 phrases)
-3. Des mots-clés pertinents pour la catégorisation (5 à 10 tags)
-4. L'ambiance/atmosphère générale (un ou deux mots comme « serein », « dramatique », « mélancolique », etc.)${tagSuggestions}${moodSuggestions}
+  return `Analysez chacune des ${imageCount} images artistiques/photographies fournies et pour CHAQUE image, fournissez :
+${basePrompt}${tagSuggestions}${moodSuggestions}
 
 IMPORTANT :
 - Pour CHAQUE image : RÉUTILISEZ en priorité les tags/moods de la liste ci-dessus s'ils sont pertinents
 - Cela permet de mieux organiser et regrouper les images similaires
 - Ne créez un nouveau tag/mood que si aucun terme existant ne convient
 - Utilisez exactement la même casse que dans la liste (ex: "architecture" pas "Architecture")
-- Retournez un tableau JSON avec exactement ${imagePaths.length} éléments, dans le MÊME ORDRE que les images fournies
+- Retournez un tableau JSON avec exactement ${imageCount} éléments, dans le MÊME ORDRE que les images fournies
 
 Respond in JSON format exactly like this:
 [
@@ -264,6 +245,48 @@ Respond in JSON format exactly like this:
     "mood": "..."
   }
 ]`;
+}
+
+/**
+ * Analyze multiple images in a single Gemini API call (up to 75 images)
+ * Much more efficient than calling analyzeImage() multiple times
+ * Returns analyses AND usage metadata for API call tracking
+ */
+export async function analyzeImagesBatch(imagePaths: string[], configId?: string): Promise<ImageAnalysisBatchResult> {
+  try {
+    // Get the config (specified or default)
+    const config = configId
+      ? enrichmentConfigDb.getById(configId)
+      : enrichmentConfigDb.getDefault();
+
+    if (!config) {
+      throw new Error('No enrichment config found');
+    }
+
+    if (imagePaths.length === 0) {
+      return { analyses: [], configId: config.id };
+    }
+
+    // Gemini 3 Flash has 1M token context - 75 images uses ~150-300k tokens (safe margin)
+    if (imagePaths.length > 75) {
+      throw new Error('Cannot analyze more than 75 images in a single batch');
+    }
+
+    const model = genAI.getGenerativeModel({ model: config.model });
+
+    // Get existing popular tags and moods to encourage reuse across all images
+    const popularTags = getPopularTags(50);
+    const popularMoods = getPopularMoods(20);
+
+    // Prepare all images
+    const imageData = imagePaths.map(imagePath => {
+      const imageBuffer = fs.readFileSync(imagePath);
+      const base64Image = imageBuffer.toString('base64');
+      const mimeType = getMimeType(imagePath);
+      return { mimeType, data: base64Image };
+    });
+
+    const prompt = buildBatchPrompt(config.prompt, imagePaths.length, popularTags, popularMoods);
 
     // Build the content array: prompt first, then all images
     const contentParts = [
@@ -315,6 +338,7 @@ Respond in JSON format exactly like this:
 
     return {
       analyses,
+      configId: config.id,
       usageMetadata
     };
   } catch (error) {
