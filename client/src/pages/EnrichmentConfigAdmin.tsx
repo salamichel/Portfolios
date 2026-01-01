@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { enrichmentConfigsApi } from '../api/client';
+import { enrichmentConfigsApi, imagesApi } from '../api/client';
 import type { EnrichmentConfig, GeminiModel } from '../types';
 import { ArrowLeft, Plus, Trash2, Check, Edit2, Star, Sparkles, Save, X } from 'lucide-react';
+import { BatchEnrichButton } from '../components/BatchEnrichButton';
 
 const MODEL_LABELS: Record<GeminiModel, string> = {
   'gemini-3-flash-preview': 'Gemini 3 Flash (Rapide)',
@@ -18,6 +19,7 @@ export function EnrichmentConfigAdmin() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [totalImageCount, setTotalImageCount] = useState(0);
 
   // Form states
   const [formName, setFormName] = useState('');
@@ -32,12 +34,14 @@ export function EnrichmentConfigAdmin() {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [configsData, modelsData] = await Promise.all([
+      const [configsData, modelsData, imagesData] = await Promise.all([
         enrichmentConfigsApi.getAll(),
-        enrichmentConfigsApi.getModels()
+        enrichmentConfigsApi.getModels(),
+        imagesApi.getAll({ limit: 1 })
       ]);
       setConfigs(configsData);
       setModels(modelsData);
+      setTotalImageCount(imagesData.total);
     } catch (error) {
       console.error('Failed to load data:', error);
       setMessage({ type: 'error', text: 'Erreur lors du chargement des configurations' });
@@ -328,6 +332,18 @@ export function EnrichmentConfigAdmin() {
               ))}
             </div>
           )}
+        </div>
+
+        {/* Batch Enrichment Section */}
+        <div className="mt-8 p-6 bg-gray-800 rounded-lg border border-gray-700">
+          <h2 className="text-lg font-semibold mb-4">Enrichissement par lot</h2>
+          <p className="text-sm text-gray-400 mb-4">
+            Enrichissez vos images en masse avec l'IA. Sélectionnez une configuration et lancez l'enrichissement.
+          </p>
+          <BatchEnrichButton
+            onComplete={loadData}
+            totalImageCount={totalImageCount}
+          />
         </div>
 
         {/* Info */}

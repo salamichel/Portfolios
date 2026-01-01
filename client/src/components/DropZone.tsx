@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { Upload, X, Loader2, Sparkles, Check } from 'lucide-react';
+import { Upload, X, Loader2, Check } from 'lucide-react';
 import { imagesApi } from '../api/client';
 import type { Theme } from '../types';
 
@@ -17,7 +17,6 @@ interface FileWithPreview extends File {
 export function DropZone({ themes, onUploadComplete, preselectedThemeId }: DropZoneProps) {
   const [files, setFiles] = useState<FileWithPreview[]>([]);
   const [selectedTheme, setSelectedTheme] = useState<string>(preselectedThemeId || '');
-  const [autoEnrich, setAutoEnrich] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
 
@@ -59,8 +58,7 @@ export function DropZone({ themes, onUploadComplete, preselectedThemeId }: DropZ
       await imagesApi.upload(
         files,
         {
-          theme_id: selectedTheme || undefined,
-          auto_enrich: autoEnrich
+          theme_id: selectedTheme || undefined
         },
         setProgress
       );
@@ -115,17 +113,6 @@ export function DropZone({ themes, onUploadComplete, preselectedThemeId }: DropZ
               ))}
             </select>
           </div>
-
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={autoEnrich}
-              onChange={(e) => setAutoEnrich(e.target.checked)}
-              className="w-5 h-5 rounded border-gray-600 bg-gray-700 text-rose-500 focus:ring-rose-500"
-            />
-            <Sparkles className="w-4 h-4 text-amber-400" />
-            <span className="text-sm">Enrichir avec Gemini AI</span>
-          </label>
         </div>
       )}
 
