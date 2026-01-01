@@ -102,6 +102,9 @@ export function BatchEnrichButton({ onComplete, selectedImageIds, totalImageCoun
 
   const selectedConfig = configs.find(c => c.id === selectedConfigId);
   const hasSelectedImages = selectedImageIds && selectedImageIds.length > 0;
+  const currentCount = mode === 'selected' ? (selectedImageIds?.length || 0)
+    : mode === 'all' ? (totalImageCount || 0)
+    : unenrichedCount;
 
   const getButtonLabel = () => {
     if (enriching) {
