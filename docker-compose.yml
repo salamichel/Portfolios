@@ -28,7 +28,7 @@ services:
     container_name: ${COMPOSE_PROJECT_NAME:-portfolio}-client
     restart: unless-stopped
     ports:
-      - "8250:80"
+      - "${CLIENT_PORT:-8250}:80"
     depends_on:
       server:
         condition: service_healthy
