@@ -3,7 +3,7 @@ services:
     build:
       context: ./server
       dockerfile: Dockerfile.dev
-    container_name: portfolio-server-dev
+    container_name: ${COMPOSE_PROJECT_NAME:-portfolio}-server-dev
     environment:
       - NODE_ENV=development
       - PORT=3001
@@ -22,7 +22,7 @@ services:
     build:
       context: ./client
       dockerfile: Dockerfile.dev
-    container_name: portfolio-client-dev
+    container_name: ${COMPOSE_PROJECT_NAME:-portfolio}-client-dev
     environment:
       - VITE_API_URL=http://localhost:3001
     volumes:

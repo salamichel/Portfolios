@@ -3,7 +3,7 @@ services:
     build:
       context: ./server
       dockerfile: Dockerfile
-    container_name: portfolio-server
+    container_name: ${COMPOSE_PROJECT_NAME:-portfolio}-server
     restart: unless-stopped
     environment:
       - NODE_ENV=production
@@ -25,7 +25,7 @@ services:
     build:
       context: ./client
       dockerfile: Dockerfile
-    container_name: portfolio-client
+    container_name: ${COMPOSE_PROJECT_NAME:-portfolio}-client
     restart: unless-stopped
     ports:
       - "8250:80"
