@@ -4,7 +4,6 @@ import { imagesApi, getMediumImageUrl, getThumbnailUrl } from '../api/client';
 import type { Image, Theme, TagWithCount, MoodWithCount } from '../types';
 import { CreateBookFromPhotoModal } from './book/CreateBookFromPhotoModal';
 import { CreateBookFromPhotosModal } from './book/CreateBookFromPhotosModal';
-import { BatchEnrichButton } from './BatchEnrichButton';
 
 interface EditFormData {
   title: string;
@@ -355,13 +354,6 @@ export function ImageGallery({ themeId, themes, searchQuery, onImageUpdate }: Im
 
       {/* Advanced filters - always visible */}
       <div className="mb-4 p-4 bg-gray-800 rounded-lg space-y-3">
-        {/* Batch Enrich Button */}
-        <BatchEnrichButton
-          onComplete={() => loadImages(true)}
-          selectedImageIds={Array.from(selectedImages)}
-          totalImageCount={total}
-        />
-
         <div className="flex flex-wrap gap-3">
           {/* Tag filter */}
           <div className="flex-1 min-w-[200px]">
