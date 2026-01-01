@@ -517,12 +517,12 @@ export const imageDb = {
 
   create(image: Omit<Image, 'created_at' | 'updated_at'>): Image {
     db.prepare(`
-      INSERT INTO images (id, filename, original_name, theme_id, title, description, tags, mood, ai_enriched, width, height, size, mime_type)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO images (id, filename, original_name, theme_id, title, description, tags, mood, ai_enriched, enrichment_config_id, width, height, size, mime_type)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       image.id, image.filename, image.original_name, image.theme_id,
       image.title, image.description, image.tags, image.mood, image.ai_enriched ? 1 : 0,
-      image.width, image.height, image.size, image.mime_type
+      image.enrichment_config_id, image.width, image.height, image.size, image.mime_type
     );
     return this.getById(image.id)!;
   },
