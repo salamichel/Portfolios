@@ -189,7 +189,8 @@ router.post('/upload', upload.array('images', 50), async (req, res) => {
         description: null as string | null,
         tags: null as string | null,
         mood: null as string | null,
-        ai_enriched: false
+        ai_enriched: false,
+        enrichment_config_id: null as string | null
       };
 
       // Optionally analyze with Gemini (use WebP version since Gemini doesn't support TIFF)
@@ -202,7 +203,8 @@ router.post('/upload', upload.array('images', 50), async (req, res) => {
             description: analysis.description,
             tags: JSON.stringify(analysis.tags),
             mood: analysis.mood,
-            ai_enriched: true
+            ai_enriched: true,
+            enrichment_config_id: analysis.configId
           };
         } catch (err) {
           console.error('Failed to enrich image with Gemini:', err);
@@ -226,6 +228,7 @@ router.post('/upload', upload.array('images', 50), async (req, res) => {
         tags: enrichment.tags,
         mood: enrichment.mood,
         ai_enriched: enrichment.ai_enriched,
+        enrichment_config_id: enrichment.enrichment_config_id,
         width: metadata.width || null,
         height: metadata.height || null,
         size: file.size,
