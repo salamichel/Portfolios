@@ -365,7 +365,7 @@ router.post('/images/:imageId/recognize', async (req, res) => {
     // Get base directory
     const BASE_DIR = process.env.BASE_DIR || process.cwd();
     const uploadsDir = path.join(BASE_DIR, 'uploads');
-    const imagePath = path.join(uploadsDir, 'optimized', `${image.filename}.webp`);
+    const imagePath = path.join(uploadsDir, 'optimized', `${path.parse(image.filename).name}.webp`);
 
     // Recognize people
     const result = await recognizePeople(imagePath, uploadsDir);
@@ -417,7 +417,7 @@ router.post('/batch-recognize', async (req, res) => {
           continue;
         }
 
-        const imagePath = path.join(uploadsDir, 'optimized', `${image.filename}.webp`);
+        const imagePath = path.join(uploadsDir, 'optimized', `${path.parse(image.filename).name}.webp`);
         const result = await recognizePeople(imagePath, uploadsDir);
 
         if (save) {
