@@ -13,6 +13,13 @@ export default function FamilyAdmin() {
   const [isUploadingTraining, setIsUploadingTraining] = useState(false);
   const [newMember, setNewMember] = useState({ name: '', relationship: '', notes: '' });
 
+  // Batch recognition state
+  const [isRecognizing, setIsRecognizing] = useState(false);
+  const [batchSize, setBatchSize] = useState(10);
+  const [recognitionProgress, setRecognitionProgress] = useState({ current: 0, total: 0 });
+  const [recognitionLogs, setRecognitionLogs] = useState<string[]>([]);
+  const [recognitionResults, setRecognitionResults] = useState<any>(null);
+
   useEffect(() => {
     loadMembers();
   }, []);
@@ -118,25 +125,70 @@ export default function FamilyAdmin() {
     }
   };
 
+  const addLog = (message: string) => {
+    const timestamp = new Date().toLocaleTimeString('fr-FR');
+    setRecognitionLogs(prev => [...prev, `[${timestamp}] ${message}`]);
+  };
+
   const handleBatchRecognize = async () => {
-    if (!confirm('Lancer la reconnaissance sur toutes les images ? Cela peut prendre du temps.')) return;
+    if (members.length === 0) {
+      alert('Créez au moins un membre de famille et ajoutez des photos d\'entraînement avant de lancer la reconnaissance.');
+      return;
+    }
+
+    if (!confirm(`Lancer la reconnaissance sur toutes les images ?\n\nConfiguration:\n- Taille des lots: ${batchSize} images\n- Cela peut prendre plusieurs minutes.`)) {
+      return;
+    }
 
     try {
+      setIsRecognizing(true);
+      setRecognitionLogs([]);
+      setRecognitionResults(null);
+      setRecognitionProgress({ current: 0, total: 0 });
+
+      addLog('📊 Récupération de la liste des images...');
+
       // Get all images
-      const response = await api.get('/images?limit=1000');
+      const response = await api.get('/images?limit=10000');
       const images = response.data.images || [];
       const imageIds = images.map((img: Image) => img.id);
+
+      if (imageIds.length === 0) {
+        addLog('⚠️ Aucune image trouvée');
+        return;
+      }
+
+      addLog(`✅ ${imageIds.length} images à analyser`);
+      addLog(`⚙️ Configuration: ${batchSize} images par lot`);
+      addLog(`🔄 Lancement de la reconnaissance...`);
+
+      setRecognitionProgress({ current: 0, total: imageIds.length });
 
       // Launch batch recognition
       const recognitionResponse = await api.post('/family/batch-recognize', {
         image_ids: imageIds,
-        save: true
+        save: true,
+        batch_size: batchSize
       });
 
-      alert(`Reconnaissance terminée !\n${recognitionResponse.data.summary.total_people_detected} personnes détectées dans ${recognitionResponse.data.summary.successful} images.`);
-    } catch (error) {
+      const summary = recognitionResponse.data.summary;
+      setRecognitionResults(summary);
+      setRecognitionProgress({ current: summary.successful, total: imageIds.length });
+
+      addLog(`\n🎉 RECONNAISSANCE TERMINÉE !`);
+      addLog(`📸 Images traitées: ${summary.successful}/${summary.total_images}`);
+      addLog(`👥 Personnes détectées: ${summary.total_people_detected}`);
+      addLog(`🔌 Appels API utilisés: ${summary.api_calls_made} (au lieu de ${summary.total_images})`);
+      addLog(`💰 Économie: ${Math.round((1 - summary.api_calls_made / summary.total_images) * 100)}%`);
+
+      if (summary.not_found > 0) {
+        addLog(`⚠️ Images non trouvées: ${summary.not_found}`);
+      }
+    } catch (error: any) {
       console.error('Failed to batch recognize:', error);
-      alert('Échec de la reconnaissance par lot');
+      addLog(`❌ ERREUR: ${error.response?.data?.error || error.message || 'Échec de la reconnaissance'}`);
+    } finally {
+      setIsRecognizing(false);
     }
   };
 
@@ -165,17 +217,123 @@ export default function FamilyAdmin() {
             </button>
             <h1 className="text-2xl font-bold">Gestion de la Famille</h1>
           </div>
-          <button
-            onClick={handleBatchRecognize}
-            className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors"
-          >
-            🔍 Reconnaître toutes les images
-          </button>
         </div>
       </header>
 
       {/* Main content */}
       <div className="max-w-7xl mx-auto p-6">
+        {/* Batch Recognition Panel */}
+        <div className="mb-6 bg-gradient-to-r from-purple-900/30 to-pink-900/30 border border-purple-500/30 rounded-lg p-6">
+          <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+            <span>🤖</span>
+            Reconnaissance Automatique
+          </h2>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Configuration */}
+            <div>
+              <h3 className="text-sm font-semibold text-slate-300 mb-3">Configuration</h3>
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-sm text-slate-400 mb-1">Taille des lots (images par appel API)</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="20"
+                    value={batchSize}
+                    onChange={(e) => setBatchSize(parseInt(e.target.value))}
+                    disabled={isRecognizing}
+                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded text-white disabled:opacity-50"
+                  />
+                  <p className="text-xs text-slate-500 mt-1">
+                    Recommandé : 10. Plus petit = plus lent mais moins de tokens par requête.
+                  </p>
+                </div>
+
+                <button
+                  onClick={handleBatchRecognize}
+                  disabled={isRecognizing || members.length === 0}
+                  className="w-full px-4 py-3 bg-purple-600 hover:bg-purple-700 disabled:bg-slate-700 disabled:cursor-not-allowed rounded-lg transition-colors font-semibold flex items-center justify-center gap-2"
+                >
+                  {isRecognizing ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                      Reconnaissance en cours...
+                    </>
+                  ) : (
+                    <>🔍 Lancer la reconnaissance</>
+                  )}
+                </button>
+
+                {members.length === 0 && (
+                  <p className="text-xs text-amber-400">
+                    ⚠️ Créez au moins un membre de famille et ajoutez des photos d'entraînement
+                  </p>
+                )}
+              </div>
+
+              {/* Progress */}
+              {recognitionProgress.total > 0 && (
+                <div className="mt-4">
+                  <div className="flex justify-between text-sm text-slate-400 mb-1">
+                    <span>Progression</span>
+                    <span>{recognitionProgress.current}/{recognitionProgress.total}</span>
+                  </div>
+                  <div className="w-full bg-slate-700 rounded-full h-2">
+                    <div
+                      className="bg-purple-500 h-2 rounded-full transition-all duration-300"
+                      style={{ width: `${(recognitionProgress.current / recognitionProgress.total) * 100}%` }}
+                    ></div>
+                  </div>
+                </div>
+              )}
+
+              {/* Results Summary */}
+              {recognitionResults && (
+                <div className="mt-4 p-3 bg-green-900/30 border border-green-500/30 rounded">
+                  <h4 className="text-sm font-semibold text-green-400 mb-2">✅ Résultats</h4>
+                  <div className="space-y-1 text-xs text-slate-300">
+                    <div className="flex justify-between">
+                      <span>Images traitées:</span>
+                      <span className="font-semibold">{recognitionResults.successful}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Personnes détectées:</span>
+                      <span className="font-semibold text-purple-300">{recognitionResults.total_people_detected}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Appels API:</span>
+                      <span className="font-semibold text-blue-300">{recognitionResults.api_calls_made}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Économie:</span>
+                      <span className="font-semibold text-green-300">
+                        {Math.round((1 - recognitionResults.api_calls_made / recognitionResults.total_images) * 100)}%
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Logs */}
+            <div>
+              <h3 className="text-sm font-semibold text-slate-300 mb-3">Logs d'exécution</h3>
+              <div className="bg-slate-900 border border-slate-700 rounded p-3 h-64 overflow-y-auto font-mono text-xs">
+                {recognitionLogs.length === 0 ? (
+                  <p className="text-slate-500 italic">Les logs d'exécution apparaîtront ici...</p>
+                ) : (
+                  recognitionLogs.map((log, index) => (
+                    <div key={index} className="text-slate-300 mb-1 whitespace-pre-wrap">
+                      {log}
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Members list */}
           <div className="lg:col-span-1">
