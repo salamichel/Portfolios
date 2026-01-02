@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Loader2, Sparkles, Trash2, X, ChevronLeft, ChevronRight, Tag, Pencil, Save, XCircle, Info, Smile, BookOpen, Check } from 'lucide-react';
+import { Loader2, Sparkles, Trash2, X, ChevronLeft, ChevronRight, Tag, Pencil, Save, XCircle, Info, Smile, BookOpen, Check, Users } from 'lucide-react';
 import { imagesApi, getMediumImageUrl, getThumbnailUrl } from '../api/client';
-import type { Image, Theme, TagWithCount, MoodWithCount } from '../types';
+import type { Image, Theme, TagWithCount, MoodWithCount, ImagePerson } from '../types';
 import { CreateBookFromPhotoModal } from './book/CreateBookFromPhotoModal';
 import { CreateBookFromPhotosModal } from './book/CreateBookFromPhotosModal';
 
@@ -37,6 +37,8 @@ export function ImageGallery({ themeId, themes, searchQuery, onImageUpdate }: Im
   const [showCreateBookModal, setShowCreateBookModal] = useState(false);
   const [selectedImages, setSelectedImages] = useState<Set<string>>(new Set());
   const [showCreateBookFromPhotosModal, setShowCreateBookFromPhotosModal] = useState(false);
+  const [detectedPeople, setDetectedPeople] = useState<ImagePerson[]>([]);
+  const [loadingPeople, setLoadingPeople] = useState(false);
   const observerRef = useRef<IntersectionObserver | null>(null);
   const loadMoreRef = useRef<HTMLDivElement>(null);
 
@@ -155,6 +157,29 @@ export function ImageGallery({ themeId, themes, searchQuery, onImageUpdate }: Im
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [selectedImage, images, isEditing]);
+
+  // Load detected people when image is selected
+  useEffect(() => {
+    if (!selectedImage) {
+      setDetectedPeople([]);
+      return;
+    }
+
+    const loadPeople = async () => {
+      setLoadingPeople(true);
+      try {
+        const response = await imagesApi.api.get(`/api/family/images/${selectedImage.id}/people`);
+        setDetectedPeople(response.data);
+      } catch (error) {
+        console.error('Failed to load detected people:', error);
+        setDetectedPeople([]);
+      } finally {
+        setLoadingPeople(false);
+      }
+    };
+
+    loadPeople();
+  }, [selectedImage]);
 
   const handleEnrich = async (image: Image) => {
     setEnriching(image.id);
@@ -653,6 +678,40 @@ export function ImageGallery({ themeId, themes, searchQuery, onImageUpdate }: Im
                         );
                       })}
                     </div>
+                  </div>
+                )}
+
+                {/* Detected People */}
+                {(loadingPeople || detectedPeople.length > 0) && (
+                  <div className="mb-4">
+                    <div className="flex items-center gap-1 text-sm text-gray-400 mb-2">
+                      <Users className="w-4 h-4" />
+                      Personnes détectées
+                    </div>
+                    {loadingPeople ? (
+                      <div className="text-sm text-gray-500">Chargement...</div>
+                    ) : (
+                      <div className="flex flex-wrap gap-2">
+                        {detectedPeople.map((person) => (
+                          <div
+                            key={person.id}
+                            className="px-3 py-1.5 bg-gradient-to-r from-purple-500/20 to-pink-500/20 border border-purple-500/30 rounded-full text-sm"
+                          >
+                            <span className="text-purple-200 font-medium">
+                              {person.member?.name || 'Inconnu'}
+                            </span>
+                            {person.confidence !== null && person.confidence > 0 && (
+                              <span className="ml-2 px-1.5 py-0.5 bg-purple-600/60 text-purple-100 text-xs rounded-full font-semibold">
+                                {Math.round(person.confidence * 100)}%
+                              </span>
+                            )}
+                            {person.verified && (
+                              <span className="ml-1 text-green-400">✓</span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
 

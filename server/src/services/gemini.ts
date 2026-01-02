@@ -1,7 +1,7 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import fs from 'fs';
 import path from 'path';
-import { imageDb, enrichmentConfigDb, EnrichmentConfig, GeminiModel } from '../database.js';
+import { imageDb, enrichmentConfigDb, EnrichmentConfig, GeminiModel, familyMemberDb, trainingImageDb, FamilyMember, BoundingBox } from '../database.js';
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 
@@ -524,6 +524,187 @@ IMPORTANT :
     };
   } catch (error) {
     console.error('Gemini similarity analysis error:', error);
+    throw error;
+  }
+}
+
+// ===== FAMILY RECOGNITION FUNCTIONS =====
+
+export interface PersonDetection {
+  family_member_id: string;
+  family_member_name: string;
+  confidence: number;
+  bounding_box?: BoundingBox;
+}
+
+export interface FamilyRecognitionResult {
+  people: PersonDetection[];
+}
+
+/**
+ * Build training examples prompt section
+ */
+function buildTrainingExamplesPrompt(members: FamilyMember[], uploadsDir: string): { prompt: string; images: Array<{ inlineData: { mimeType: string; data: string } }> } {
+  const images: Array<{ inlineData: { mimeType: string; data: string } }> = [];
+  let prompt = '\n\n=== EXEMPLES D\'ENTRAÎNEMENT ===\n\n';
+  prompt += 'Voici des exemples de photos pour vous aider à identifier les personnes :\n\n';
+
+  let exampleIndex = 1;
+  for (const member of members) {
+    const trainingImages = trainingImageDb.getByMemberId(member.id);
+
+    if (trainingImages.length > 0) {
+      prompt += `${member.name} (${member.relationship || 'membre de la famille'}):\n`;
+
+      // Take up to 3 training images per person
+      const selectedTraining = trainingImages.slice(0, 3);
+
+      for (const training of selectedTraining) {
+        const image = imageDb.getById(training.image_id);
+        if (image) {
+          const imagePath = path.join(uploadsDir, 'optimized', `${image.filename}.webp`);
+
+          if (fs.existsSync(imagePath)) {
+            try {
+              const imageBuffer = fs.readFileSync(imagePath);
+              const base64Image = imageBuffer.toString('base64');
+              images.push({
+                inlineData: {
+                  mimeType: 'image/webp',
+                  data: base64Image
+                }
+              });
+              prompt += `  - Exemple ${exampleIndex} (voir image ci-dessous)\n`;
+              exampleIndex++;
+            } catch (error) {
+              console.error(`Failed to load training image ${imagePath}:`, error);
+            }
+          }
+        }
+      }
+      prompt += '\n';
+    }
+  }
+
+  return { prompt, images };
+}
+
+/**
+ * Analyze an image to detect and recognize family members
+ */
+export async function recognizePeople(imagePath: string, uploadsDir: string): Promise<FamilyRecognitionResult> {
+  try {
+    // Get all family members
+    const members = familyMemberDb.getAll();
+
+    if (members.length === 0) {
+      return { people: [] };
+    }
+
+    // Use Gemini Flash for speed
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+
+    // Build training examples
+    const { prompt: trainingPrompt, images: trainingImages } = buildTrainingExamplesPrompt(members, uploadsDir);
+
+    // Read target image
+    const imageBuffer = fs.readFileSync(imagePath);
+    const base64Image = imageBuffer.toString('base64');
+    const mimeType = getMimeType(imagePath);
+
+    // Build member list
+    const membersList = members.map(m => `- ${m.name} (${m.relationship || 'membre de la famille'})`).join('\n');
+
+    // Build complete prompt
+    const prompt = `Vous êtes un système de reconnaissance faciale pour une famille. Votre tâche est d'identifier les personnes présentes dans l'image fournie.
+
+=== MEMBRES DE LA FAMILLE À RECONNAÎTRE ===
+
+${membersList}
+
+${trainingPrompt}
+
+=== IMAGE À ANALYSER ===
+
+Analysez maintenant l'image suivante (la DERNIÈRE image fournie) et identifiez toutes les personnes qui correspondent aux membres de la famille ci-dessus.
+
+Pour chaque personne détectée, fournissez :
+1. L'ID du membre de la famille (utilisez exactement l'un des IDs ci-dessous)
+2. Le niveau de confiance (0.0 à 1.0)
+3. Si possible, la position approximative (bounding box avec x, y, width, height en pourcentage de 0 à 100)
+
+IDs des membres :
+${members.map(m => `- ${m.name}: "${m.id}"`).join('\n')}
+
+IMPORTANT :
+- Ne retournez que les personnes que vous reconnaissez avec une confiance >= 0.5
+- Si vous n'êtes pas sûr, ne devinez pas
+- Si aucune personne de la famille n'est détectée, retournez un tableau vide
+
+Répondez au format JSON suivant :
+{
+  "people": [
+    {
+      "family_member_id": "id-du-membre",
+      "confidence": 0.85,
+      "bounding_box": {
+        "x": 20,
+        "y": 30,
+        "width": 40,
+        "height": 50
+      }
+    }
+  ]
+}`;
+
+    // Prepare content parts (training images first, then target image)
+    const contentParts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = [
+      { text: prompt }
+    ];
+
+    // Add training images
+    contentParts.push(...trainingImages);
+
+    // Add target image (the one to analyze)
+    contentParts.push({
+      inlineData: {
+        mimeType,
+        data: base64Image
+      }
+    });
+
+    const result = await model.generateContent(contentParts);
+    const response = await result.response;
+    const text = response.text();
+
+    // Extract JSON from response
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      console.error('Could not parse Gemini response:', text);
+      return { people: [] };
+    }
+
+    const parsed = JSON.parse(jsonMatch[0]);
+    const people = Array.isArray(parsed.people) ? parsed.people : [];
+
+    // Enrich with member names
+    const enrichedPeople: PersonDetection[] = people.map((p: any) => {
+      const member = familyMemberDb.getById(p.family_member_id);
+      return {
+        family_member_id: p.family_member_id,
+        family_member_name: member?.name || 'Unknown',
+        confidence: p.confidence || 0,
+        bounding_box: p.bounding_box
+      };
+    });
+
+    console.log(`[Family Recognition] Detected ${enrichedPeople.length} people in image`);
+
+    return {
+      people: enrichedPeople
+    };
+  } catch (error) {
+    console.error('Family recognition error:', error);
     throw error;
   }
 }

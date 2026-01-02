@@ -180,3 +180,55 @@ export interface EnrichmentConfig {
   created_at: string;
   updated_at: string;
 }
+
+// Family recognition types
+export interface FamilyMember {
+  id: string;
+  name: string;
+  relationship: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+  training_image_count?: number;
+}
+
+export interface BoundingBox {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface TrainingImage {
+  id: string;
+  image_id: string;
+  family_member_id: string;
+  bounding_box: string | null;
+  verified: boolean;
+  created_at: string;
+  image?: Image;
+  member?: FamilyMember;
+}
+
+export interface ImagePerson {
+  id: string;
+  image_id: string;
+  family_member_id: string | null;
+  confidence: number | null;
+  bounding_box: string | null;
+  verified: boolean;
+  created_at: string;
+  updated_at: string;
+  member?: FamilyMember;
+}
+
+export interface PersonDetection {
+  family_member_id: string;
+  family_member_name: string;
+  confidence: number;
+  bounding_box?: BoundingBox;
+}
+
+export interface FamilyRecognitionResult {
+  people: PersonDetection[];
+}
