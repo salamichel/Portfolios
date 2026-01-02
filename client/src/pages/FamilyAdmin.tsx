@@ -172,14 +172,26 @@ export default function FamilyAdmin() {
       });
 
       const summary = recognitionResponse.data.summary;
+      const failedBatches = recognitionResponse.data.failed_batches || [];
       setRecognitionResults(summary);
       setRecognitionProgress({ current: summary.successful, total: imageIds.length });
 
       addLog(`\n🎉 RECONNAISSANCE TERMINÉE !`);
       addLog(`📸 Images traitées: ${summary.successful}/${summary.total_images}`);
       addLog(`👥 Personnes détectées: ${summary.total_people_detected}`);
-      addLog(`🔌 Appels API utilisés: ${summary.api_calls_made} (au lieu de ${summary.total_images})`);
-      addLog(`💰 Économie: ${Math.round((1 - summary.api_calls_made / summary.total_images) * 100)}%`);
+      addLog(`📦 Lots réussis: ${summary.api_calls_made}/${summary.total_batches}`);
+
+      if (failedBatches.length > 0) {
+        addLog(`\n⚠️ LOTS ÉCHOUÉS: ${failedBatches.length}`);
+        failedBatches.forEach((batch: any) => {
+          addLog(`   Lot ${batch.batchNumber}: ${batch.imageCount} images - ${batch.error}`);
+        });
+        addLog(`💡 Conseil: Réduisez la taille des lots pour éviter les erreurs`);
+      }
+
+      if (summary.api_calls_made > 0) {
+        addLog(`💰 Économie: ${Math.round((1 - summary.api_calls_made / summary.total_images) * 100)}% vs appels individuels`);
+      }
 
       if (summary.not_found > 0) {
         addLog(`⚠️ Images non trouvées: ${summary.not_found}`);
@@ -309,9 +321,17 @@ export default function FamilyAdmin() {
                       <span className="font-semibold text-purple-300">{recognitionResults.total_people_detected}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span>Appels API:</span>
-                      <span className="font-semibold text-blue-300">{recognitionResults.api_calls_made}</span>
+                      <span>Lots réussis:</span>
+                      <span className="font-semibold text-blue-300">
+                        {recognitionResults.api_calls_made}/{recognitionResults.total_batches || recognitionResults.api_calls_made}
+                      </span>
                     </div>
+                    {recognitionResults.failed_batches > 0 && (
+                      <div className="flex justify-between">
+                        <span>Lots échoués:</span>
+                        <span className="font-semibold text-red-400">{recognitionResults.failed_batches}</span>
+                      </div>
+                    )}
                     <div className="flex justify-between">
                       <span>Économie:</span>
                       <span className="font-semibold text-green-300">

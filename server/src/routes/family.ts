@@ -475,14 +475,31 @@ router.post('/batch-recognize', async (req, res) => {
 
     // Process in batches to avoid Gemini token limits
     const allResults: Array<{ image_id: string; people: any[] }> = [];
+    const failedBatches: Array<{ batchNumber: number; error: string; imageCount: number }> = [];
 
     for (let i = 0; i < imagePaths.length; i += batch_size) {
       const batch = imagePaths.slice(i, i + batch_size);
-      console.log(`[Batch Recognition] Processing batch ${Math.floor(i / batch_size) + 1}/${Math.ceil(imagePaths.length / batch_size)} (${batch.length} images)`);
+      const batchNumber = Math.floor(i / batch_size) + 1;
+      const totalBatches = Math.ceil(imagePaths.length / batch_size);
 
-      // SINGLE API CALL for this batch
-      const batchResults = await recognizePeopleBatch(batch, uploadsDir);
-      allResults.push(...batchResults);
+      console.log(`[Batch Recognition] Processing batch ${batchNumber}/${totalBatches} (${batch.length} images)`);
+
+      try {
+        // SINGLE API CALL for this batch
+        const batchResults = await recognizePeopleBatch(batch, uploadsDir);
+        allResults.push(...batchResults);
+        console.log(`[Batch Recognition] Batch ${batchNumber} completed: ${batchResults.reduce((sum, r) => sum + r.people.length, 0)} people detected`);
+      } catch (error: any) {
+        // Continue processing other batches even if this one fails
+        const errorMsg = error.message || 'Unknown error';
+        console.error(`[Batch Recognition] Batch ${batchNumber} FAILED: ${errorMsg}`);
+        failedBatches.push({
+          batchNumber,
+          error: errorMsg,
+          imageCount: batch.length
+        });
+        // Continue to next batch instead of throwing
+      }
     }
 
     // Save to database if requested
@@ -506,16 +523,21 @@ router.post('/batch-recognize', async (req, res) => {
     }
 
     const totalPeople = allResults.reduce((sum, r) => sum + r.people.length, 0);
+    const totalBatches = Math.ceil(imagePaths.length / batch_size);
+    const successfulBatches = totalBatches - failedBatches.length;
 
     res.json({
       results: allResults,
       not_found: notFound,
+      failed_batches: failedBatches,
       summary: {
         total_images: image_ids.length,
         successful: allResults.length,
         not_found: notFound.length,
         total_people_detected: totalPeople,
-        api_calls_made: Math.ceil(imagePaths.length / batch_size) // Number of Gemini API calls
+        api_calls_made: successfulBatches, // Only successful API calls
+        failed_batches: failedBatches.length,
+        total_batches: totalBatches
       }
     });
   } catch (error) {
