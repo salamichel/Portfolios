@@ -184,6 +184,13 @@ export default function FamilyAdmin() {
       if (summary.not_found > 0) {
         addLog(`⚠️ Images non trouvées: ${summary.not_found}`);
       }
+
+      if (summary.total_people_detected > 0) {
+        addLog(`\n💡 Pour voir les résultats:`);
+        addLog(`   1. Allez dans la galerie (bouton ci-dessus)`);
+        addLog(`   2. Cliquez sur une image`);
+        addLog(`   3. Les personnes détectées apparaîtront dans le panneau latéral`);
+      }
     } catch (error: any) {
       console.error('Failed to batch recognize:', error);
       addLog(`❌ ERREUR: ${error.response?.data?.error || error.message || 'Échec de la reconnaissance'}`);
@@ -246,7 +253,7 @@ export default function FamilyAdmin() {
                     className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded text-white disabled:opacity-50"
                   />
                   <p className="text-xs text-slate-500 mt-1">
-                    Recommandé : 10. Plus petit = plus lent mais moins de tokens par requête.
+                    Recommandé : 5. Plus petit = plus lent mais moins de tokens par requête.
                   </p>
                 </div>
 
@@ -312,6 +319,21 @@ export default function FamilyAdmin() {
                       </span>
                     </div>
                   </div>
+
+                  {/* Navigation to gallery */}
+                  {recognitionResults.total_people_detected > 0 && (
+                    <div className="mt-3 pt-3 border-t border-green-500/30">
+                      <button
+                        onClick={() => navigate('/')}
+                        className="w-full px-3 py-2 bg-green-600 hover:bg-green-700 rounded text-sm font-semibold transition-colors flex items-center justify-center gap-2"
+                      >
+                        📸 Voir les résultats dans la galerie
+                      </button>
+                      <p className="text-xs text-slate-400 mt-2 text-center">
+                        💡 Cliquez sur une image pour voir les personnes détectées
+                      </p>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
