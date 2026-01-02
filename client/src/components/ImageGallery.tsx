@@ -1102,6 +1102,81 @@ export function ImageGallery({ themeId, themes, searchQuery, onImageUpdate }: Im
                     </div>
                   </div>
                 )}
+
+                {/* Detected People */}
+                {(loadingPeople || detectedPeople.length > 0 || familyMembers.length > 0) && (
+                  <div className="mb-4">
+                    <div className="flex items-center gap-1 text-sm text-gray-400 mb-2">
+                      <Users className="w-4 h-4" />
+                      Personnes
+                    </div>
+                    {loadingPeople ? (
+                      <div className="text-sm text-gray-500">Chargement...</div>
+                    ) : (
+                      <>
+                        <div className="flex flex-wrap gap-2 mb-3">
+                          {detectedPeople.map((person) => (
+                            <div
+                              key={person.id}
+                              className="group relative px-3 py-1.5 bg-gradient-to-r from-purple-500/20 to-pink-500/20 hover:from-purple-500/40 hover:to-pink-500/40 border border-purple-500/30 hover:border-purple-400/50 rounded-full text-sm flex items-center gap-2 cursor-pointer transition-all"
+                              onClick={() => person.family_member_id && handlePersonClick(person.family_member_id)}
+                            >
+                              <span className="text-purple-200 font-medium">
+                                {person.member?.name || 'Inconnu'}
+                              </span>
+                              {person.confidence !== null && person.confidence > 0 && person.confidence < 1 && (
+                                <span className="px-1.5 py-0.5 bg-purple-600/60 text-purple-100 text-xs rounded-full font-semibold">
+                                  {Math.round(person.confidence * 100)}%
+                                </span>
+                              )}
+                              {person.verified && (
+                                <span className="text-green-400">✓</span>
+                              )}
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleRemovePerson(person.id);
+                                }}
+                                className="opacity-0 group-hover:opacity-100 transition-opacity text-red-400 hover:text-red-300"
+                                title="Retirer"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* Add person dropdown */}
+                        {familyMembers.length > 0 && (
+                          <div className="flex gap-2">
+                            <select
+                              value={selectedPersonToAdd}
+                              onChange={(e) => setSelectedPersonToAdd(e.target.value)}
+                              className="flex-1 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm"
+                              disabled={addingPerson}
+                            >
+                              <option value="">+ Ajouter une personne</option>
+                              {familyMembers
+                                .filter(member => !detectedPeople.some(p => p.family_member_id === member.id))
+                                .map(member => (
+                                  <option key={member.id} value={member.id}>
+                                    {member.name}
+                                  </option>
+                                ))}
+                            </select>
+                            <button
+                              onClick={handleAddPerson}
+                              disabled={!selectedPersonToAdd || addingPerson}
+                              className="px-3 py-1 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-700 disabled:cursor-not-allowed rounded text-sm transition-colors"
+                            >
+                              {addingPerson ? '...' : 'OK'}
+                            </button>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
               </>
             )}
 
