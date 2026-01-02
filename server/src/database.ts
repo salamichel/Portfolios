@@ -270,7 +270,7 @@ try {
         FOREIGN KEY (family_member_id) REFERENCES family_members(id) ON DELETE CASCADE
       );
 
-      CREATE INDEX idx_training_images_member ON training_images(family_member_id);
+      CREATE INDEX IF NOT EXISTS idx_training_images_member ON training_images(family_member_id);
 
       DROP TABLE training_images_old;
     `);
@@ -1792,7 +1792,7 @@ export const trainingImageDb = {
       training.size,
       training.mime_type,
       training.bounding_box,
-      training.verified
+      training.verified ? 1 : 0
     );
     return this.getById(training.id)!;
   },
