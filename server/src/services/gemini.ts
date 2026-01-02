@@ -689,19 +689,165 @@ Répondez au format JSON suivant :
       const member = familyMemberDb.getById(p.family_member_id);
       return {
         family_member_id: p.family_member_id,
-        family_member_name: member?.name || 'Unknown',
-        confidence: p.confidence || 0,
-        bounding_box: p.bounding_box
+        confidence: p.confidence,
+        bounding_box: p.bounding_box || null,
+        member_name: member?.name || null
       };
     });
 
     console.log(`[Family Recognition] Detected ${enrichedPeople.length} people in image`);
 
-    return {
-      people: enrichedPeople
-    };
+    return { people: enrichedPeople };
   } catch (error) {
-    console.error('Family recognition error:', error);
-    throw error;
+    console.error('Error recognizing people:', error);
+    return { people: [] };
+  }
+}
+
+/**
+ * Batch analyze multiple images in a SINGLE API call to reduce costs
+ */
+export async function recognizePeopleBatch(
+  imagePaths: Array<{ id: string; path: string }>,
+  uploadsDir: string
+): Promise<Array<{ image_id: string; people: PersonDetection[] }>> {
+  try {
+    // Get all family members
+    const members = familyMemberDb.getAll();
+
+    if (members.length === 0) {
+      return imagePaths.map(img => ({ image_id: img.id, people: [] }));
+    }
+
+    // Use Gemini Flash for speed
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+
+    // Build training examples ONCE for all images
+    const { prompt: trainingPrompt, images: trainingImages } = buildTrainingExamplesPrompt(members, uploadsDir);
+
+    // Build member list
+    const membersList = members.map(m => `- ${m.name} (${m.relationship || 'membre de la famille'})`).join('\n');
+    const memberIds = members.map(m => `- ${m.name}: "${m.id}"`).join('\n');
+
+    // Build complete prompt for batch processing
+    const prompt = `Vous êtes un système de reconnaissance faciale pour une famille. Votre tâche est d'identifier les personnes présentes dans ${imagePaths.length} images fournies.
+
+=== MEMBRES DE LA FAMILLE À RECONNAÎTRE ===
+
+${membersList}
+
+${trainingPrompt}
+
+=== IMAGES À ANALYSER (${imagePaths.length} images) ===
+
+Analysez maintenant les ${imagePaths.length} images suivantes et identifiez toutes les personnes qui correspondent aux membres de la famille ci-dessus.
+
+Pour CHAQUE image, fournissez :
+1. L'index de l'image (0 à ${imagePaths.length - 1})
+2. Les personnes détectées avec :
+   - L'ID du membre de la famille
+   - Le niveau de confiance (0.0 à 1.0)
+   - Si possible, la position (bounding box)
+
+IDs des membres :
+${memberIds}
+
+IMPORTANT :
+- Ne retournez que les personnes reconnues avec une confiance >= 0.5
+- Si vous n'êtes pas sûr, ne devinez pas
+- Si aucune personne n'est détectée dans une image, retournez un tableau vide pour cette image
+- Traitez TOUTES les ${imagePaths.length} images
+
+Répondez au format JSON suivant :
+{
+  "images": [
+    {
+      "image_index": 0,
+      "people": [
+        {
+          "family_member_id": "id-du-membre",
+          "confidence": 0.85,
+          "bounding_box": { "x": 20, "y": 30, "width": 40, "height": 50 }
+        }
+      ]
+    },
+    {
+      "image_index": 1,
+      "people": []
+    }
+  ]
+}`;
+
+    // Prepare content parts
+    const contentParts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = [
+      { text: prompt }
+    ];
+
+    // Add training images ONCE
+    contentParts.push(...trainingImages);
+
+    // Add all target images
+    for (const imgPath of imagePaths) {
+      try {
+        const imageBuffer = fs.readFileSync(imgPath.path);
+        const base64Image = imageBuffer.toString('base64');
+        const mimeType = getMimeType(imgPath.path);
+
+        contentParts.push({
+          inlineData: {
+            mimeType,
+            data: base64Image
+          }
+        });
+      } catch (error) {
+        console.error(`Failed to load image ${imgPath.path}:`, error);
+      }
+    }
+
+    console.log(`[Family Recognition Batch] Sending ${imagePaths.length} images + ${trainingImages.length} training images in ONE API call`);
+
+    const result = await model.generateContent(contentParts);
+    const response = await result.response;
+    const text = response.text();
+
+    // Extract JSON from response
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      console.error('Could not parse Gemini batch response:', text);
+      return imagePaths.map(img => ({ image_id: img.id, people: [] }));
+    }
+
+    const parsed = JSON.parse(jsonMatch[0]);
+    const imageResults = Array.isArray(parsed.images) ? parsed.images : [];
+
+    // Map results to image IDs
+    const results: Array<{ image_id: string; people: PersonDetection[] }> = imagePaths.map((img, index) => {
+      const imageResult = imageResults.find((r: any) => r.image_index === index);
+      const people = imageResult?.people || [];
+
+      // Enrich with member names
+      const enrichedPeople: PersonDetection[] = people.map((p: any) => {
+        const member = familyMemberDb.getById(p.family_member_id);
+        return {
+          family_member_id: p.family_member_id,
+          confidence: p.confidence,
+          bounding_box: p.bounding_box || null,
+          member_name: member?.name || null
+        };
+      });
+
+      return {
+        image_id: img.id,
+        people: enrichedPeople
+      };
+    });
+
+    const totalDetections = results.reduce((sum, r) => sum + r.people.length, 0);
+    console.log(`[Family Recognition Batch] Detected ${totalDetections} people across ${imagePaths.length} images in ONE API call`);
+
+    return results;
+  } catch (error) {
+    console.error('Error in batch recognition:', error);
+    return imagePaths.map(img => ({ image_id: img.id, people: [] }));
   }
 }

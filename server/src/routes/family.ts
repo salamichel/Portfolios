@@ -5,7 +5,7 @@ import multer from 'multer';
 import sharp from 'sharp';
 import fs from 'fs';
 import { familyMemberDb, trainingImageDb, imagePeopleDb, imageDb, FamilyMember, TrainingImage, ImagePerson } from '../database.js';
-import { recognizePeople } from '../services/gemini.js';
+import { recognizePeople, recognizePeopleBatch } from '../services/gemini.js';
 
 const router = Router();
 
@@ -447,10 +447,10 @@ router.post('/images/:imageId/recognize', async (req, res) => {
   }
 });
 
-// Batch recognize people in multiple images
+// Batch recognize people in multiple images (OPTIMIZED: 1 API call for all images)
 router.post('/batch-recognize', async (req, res) => {
   try {
-    const { image_ids, save = true } = req.body;
+    const { image_ids, save = true, batch_size = 10 } = req.body;
 
     if (!Array.isArray(image_ids) || image_ids.length === 0) {
       return res.status(400).json({ error: 'image_ids array is required' });
@@ -459,50 +459,63 @@ router.post('/batch-recognize', async (req, res) => {
     const BASE_DIR = process.env.BASE_DIR || process.cwd();
     const uploadsDir = path.join(BASE_DIR, 'uploads');
 
-    const results: Array<{ image_id: string; people: any[]; error?: string }> = [];
+    // Prepare image paths
+    const imagePaths: Array<{ id: string; path: string }> = [];
+    const notFound: string[] = [];
 
     for (const imageId of image_ids) {
-      try {
-        const image = imageDb.getById(imageId);
-        if (!image) {
-          results.push({ image_id: imageId, people: [], error: 'Image not found' });
-          continue;
+      const image = imageDb.getById(imageId);
+      if (!image) {
+        notFound.push(imageId);
+        continue;
+      }
+      const imagePath = path.join(uploadsDir, 'optimized', `${path.parse(image.filename).name}.webp`);
+      imagePaths.push({ id: imageId, path: imagePath });
+    }
+
+    // Process in batches to avoid Gemini token limits
+    const allResults: Array<{ image_id: string; people: any[] }> = [];
+
+    for (let i = 0; i < imagePaths.length; i += batch_size) {
+      const batch = imagePaths.slice(i, i + batch_size);
+      console.log(`[Batch Recognition] Processing batch ${Math.floor(i / batch_size) + 1}/${Math.ceil(imagePaths.length / batch_size)} (${batch.length} images)`);
+
+      // SINGLE API CALL for this batch
+      const batchResults = await recognizePeopleBatch(batch, uploadsDir);
+      allResults.push(...batchResults);
+    }
+
+    // Save to database if requested
+    if (save) {
+      for (const result of allResults) {
+        // Delete existing detections
+        imagePeopleDb.deleteByImageId(result.image_id);
+
+        // Save new detections
+        for (const person of result.people) {
+          imagePeopleDb.create({
+            id: uuidv4(),
+            image_id: result.image_id,
+            family_member_id: person.family_member_id,
+            confidence: person.confidence,
+            bounding_box: person.bounding_box ? JSON.stringify(person.bounding_box) : null,
+            verified: false
+          });
         }
-
-        const imagePath = path.join(uploadsDir, 'optimized', `${path.parse(image.filename).name}.webp`);
-        const result = await recognizePeople(imagePath, uploadsDir);
-
-        if (save) {
-          imagePeopleDb.deleteByImageId(imageId);
-          for (const person of result.people) {
-            imagePeopleDb.create({
-              id: uuidv4(),
-              image_id: imageId,
-              family_member_id: person.family_member_id,
-              confidence: person.confidence,
-              bounding_box: person.bounding_box ? JSON.stringify(person.bounding_box) : null,
-              verified: false
-            });
-          }
-        }
-
-        results.push({ image_id: imageId, people: result.people });
-      } catch (error: any) {
-        console.error(`Error recognizing people in image ${imageId}:`, error);
-        results.push({ image_id: imageId, people: [], error: error.message });
       }
     }
 
-    const totalPeople = results.reduce((sum, r) => sum + r.people.length, 0);
-    const successCount = results.filter(r => !r.error).length;
+    const totalPeople = allResults.reduce((sum, r) => sum + r.people.length, 0);
 
     res.json({
-      results,
+      results: allResults,
+      not_found: notFound,
       summary: {
         total_images: image_ids.length,
-        successful: successCount,
-        failed: image_ids.length - successCount,
-        total_people_detected: totalPeople
+        successful: allResults.length,
+        not_found: notFound.length,
+        total_people_detected: totalPeople,
+        api_calls_made: Math.ceil(imagePaths.length / batch_size) // Number of Gemini API calls
       }
     });
   } catch (error) {
