@@ -1,11 +1,9 @@
 import axios from 'axios';
 import type { Theme, Image, PaginatedImages, Book, BookPage, PageTemplate, PageData, BookLayoutSuggestions, LayoutSuggestion, TagWithCount, MoodWithCount, EnrichmentConfig, GeminiModel } from '../types';
 
-const api = axios.create({
+export const api = axios.create({
   baseURL: '/api'
 });
-
-export { api };
 
 // Themes API
 export const themesApi = {
