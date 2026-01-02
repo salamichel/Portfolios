@@ -28,7 +28,7 @@ export default function FamilyAdmin() {
   const loadMembers = async () => {
     try {
       setIsLoading(true);
-      const response = await api.get('/api/family/members');
+      const response = await api.get('/family/members');
       setMembers(response.data);
     } catch (error) {
       console.error('Failed to load family members:', error);
@@ -39,7 +39,7 @@ export default function FamilyAdmin() {
 
   const loadTrainingImages = async (memberId: string) => {
     try {
-      const response = await api.get(`/api/family/members/${memberId}/training-images`);
+      const response = await api.get(`/family/members/${memberId}/training-images`);
       setTrainingImages(response.data);
     } catch (error) {
       console.error('Failed to load training images:', error);
@@ -48,7 +48,7 @@ export default function FamilyAdmin() {
 
   const loadAvailableImages = async () => {
     try {
-      const response = await api.get('/api/images?limit=50');
+      const response = await api.get('/images?limit=50');
       setAvailableImages(response.data.images || []);
     } catch (error) {
       console.error('Failed to load available images:', error);
@@ -58,7 +58,7 @@ export default function FamilyAdmin() {
   const handleCreateMember = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const response = await api.post('/api/family/members', newMember);
+      const response = await api.post('/family/members', newMember);
       setMembers([...members, response.data]);
       setIsAddingMember(false);
       setNewMember({ name: '', relationship: '', notes: '' });
@@ -72,7 +72,7 @@ export default function FamilyAdmin() {
     if (!confirm('Êtes-vous sûr de vouloir supprimer ce membre ?')) return;
 
     try {
-      await api.delete(`/api/family/members/${id}`);
+      await api.delete(`/family/members/${id}`);
       setMembers(members.filter(m => m.id !== id));
       if (selectedMember?.id === id) {
         setSelectedMember(null);
@@ -88,7 +88,7 @@ export default function FamilyAdmin() {
     if (!selectedMember || !selectedImageForTraining) return;
 
     try {
-      await api.post('/api/family/training-images', {
+      await api.post('/family/training-images', {
         image_id: selectedImageForTraining,
         family_member_id: selectedMember.id,
         verified: true
@@ -108,7 +108,7 @@ export default function FamilyAdmin() {
     if (!confirm('Supprimer cette image d\'entraînement ?')) return;
 
     try {
-      await api.delete(`/api/family/training-images/${id}`);
+      await api.delete(`/family/training-images/${id}`);
       setTrainingImages(trainingImages.filter(t => t.id !== id));
       loadMembers(); // Refresh counts
     } catch (error) {
@@ -122,12 +122,12 @@ export default function FamilyAdmin() {
 
     try {
       // Get all images
-      const response = await api.get('/api/images?limit=1000');
+      const response = await api.get('/images?limit=1000');
       const images = response.data.images || [];
       const imageIds = images.map((img: Image) => img.id);
 
       // Launch batch recognition
-      const recognitionResponse = await api.post('/api/family/batch-recognize', {
+      const recognitionResponse = await api.post('/family/batch-recognize', {
         image_ids: imageIds,
         save: true
       });
