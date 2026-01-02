@@ -1845,7 +1845,7 @@ export const imagePeopleDb = {
     db.prepare(`
       INSERT INTO image_people (id, image_id, family_member_id, confidence, bounding_box, verified)
       VALUES (?, ?, ?, ?, ?, ?)
-    `).run(person.id, person.image_id, person.family_member_id, person.confidence, person.bounding_box, person.verified);
+    `).run(person.id, person.image_id, person.family_member_id, person.confidence, person.bounding_box, person.verified ? 1 : 0);
     return this.getById(person.id)!;
   },
 
