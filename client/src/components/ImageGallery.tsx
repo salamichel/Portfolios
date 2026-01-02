@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Loader2, Sparkles, Trash2, X, ChevronLeft, ChevronRight, Tag, Pencil, Save, XCircle, Info, Smile, BookOpen, Check, Users } from 'lucide-react';
 import { imagesApi, getMediumImageUrl, getThumbnailUrl, api } from '../api/client';
-import type { Image, Theme, TagWithCount, MoodWithCount, ImagePerson } from '../types';
+import type { Image, Theme, TagWithCount, MoodWithCount, ImagePerson, FamilyMember } from '../types';
 import { CreateBookFromPhotoModal } from './book/CreateBookFromPhotoModal';
 import { CreateBookFromPhotosModal } from './book/CreateBookFromPhotosModal';
 
@@ -32,6 +32,7 @@ export function ImageGallery({ themeId, themes, searchQuery, onImageUpdate }: Im
   const [showMobileDetails, setShowMobileDetails] = useState(false);
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [selectedMood, setSelectedMood] = useState<string | null>(null);
+  const [selectedPerson, setSelectedPerson] = useState<string | null>(null);
   const [availableTags, setAvailableTags] = useState<TagWithCount[]>([]);
   const [availableMoods, setAvailableMoods] = useState<MoodWithCount[]>([]);
   const [showCreateBookModal, setShowCreateBookModal] = useState(false);
@@ -39,6 +40,9 @@ export function ImageGallery({ themeId, themes, searchQuery, onImageUpdate }: Im
   const [showCreateBookFromPhotosModal, setShowCreateBookFromPhotosModal] = useState(false);
   const [detectedPeople, setDetectedPeople] = useState<ImagePerson[]>([]);
   const [loadingPeople, setLoadingPeople] = useState(false);
+  const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
+  const [selectedPersonToAdd, setSelectedPersonToAdd] = useState<string>('');
+  const [addingPerson, setAddingPerson] = useState(false);
   const observerRef = useRef<IntersectionObserver | null>(null);
   const loadMoreRef = useRef<HTMLDivElement>(null);
 
@@ -56,7 +60,8 @@ export function ImageGallery({ themeId, themes, searchQuery, onImageUpdate }: Im
         offset,
         search: searchQuery,
         tag: selectedTag || undefined,
-        mood: selectedMood || undefined
+        mood: selectedMood || undefined,
+        person: selectedPerson || undefined
       });
 
       // Sort images by original_name (filename) in ascending order
@@ -102,10 +107,23 @@ export function ImageGallery({ themeId, themes, searchQuery, onImageUpdate }: Im
     loadMetadata();
   }, []);
 
+  // Load family members
+  useEffect(() => {
+    const loadFamilyMembers = async () => {
+      try {
+        const response = await api.get('/family/members');
+        setFamilyMembers(response.data);
+      } catch (error) {
+        console.error('Failed to load family members:', error);
+      }
+    };
+    loadFamilyMembers();
+  }, []);
+
   // Initial load and filter changes
   useEffect(() => {
     loadImages(true);
-  }, [themeId, searchQuery, selectedTag, selectedMood]);
+  }, [themeId, searchQuery, selectedTag, selectedMood, selectedPerson]);
 
   // Infinite scroll
   useEffect(() => {
@@ -194,6 +212,41 @@ export function ImageGallery({ themeId, themes, searchQuery, onImageUpdate }: Im
       console.error('Failed to enrich image:', error);
     } finally {
       setEnriching(null);
+    }
+  };
+
+  const handleAddPerson = async () => {
+    if (!selectedImage || !selectedPersonToAdd) return;
+
+    setAddingPerson(true);
+    try {
+      const response = await api.post(`/family/images/${selectedImage.id}/people`, {
+        family_member_id: selectedPersonToAdd
+      });
+
+      setDetectedPeople(prev => [...prev, response.data]);
+      setSelectedPersonToAdd('');
+    } catch (error: any) {
+      console.error('Failed to add person:', error);
+      if (error.response?.status === 409) {
+        alert('Cette personne est déjà taguée sur cette image');
+      } else {
+        alert('Échec de l\'ajout de la personne');
+      }
+    } finally {
+      setAddingPerson(false);
+    }
+  };
+
+  const handleRemovePerson = async (personId: string) => {
+    if (!confirm('Retirer cette personne de l\'image ?')) return;
+
+    try {
+      await api.delete(`/family/people/${personId}`);
+      setDetectedPeople(prev => prev.filter(p => p.id !== personId));
+    } catch (error) {
+      console.error('Failed to remove person:', error);
+      alert('Échec de la suppression');
     }
   };
 
@@ -317,6 +370,11 @@ export function ImageGallery({ themeId, themes, searchQuery, onImageUpdate }: Im
     closeLightbox();
   };
 
+  const handlePersonClick = (personId: string) => {
+    setSelectedPerson(personId);
+    closeLightbox();
+  };
+
   const toggleImageSelection = (imageId: string) => {
     setSelectedImages(prev => {
       const newSet = new Set(prev);
@@ -415,10 +473,30 @@ export function ImageGallery({ themeId, themes, searchQuery, onImageUpdate }: Im
               </select>
             </div>
           </div>
+
+          {/* Person filter */}
+          {familyMembers.length > 0 && (
+            <div className="flex-1 min-w-[200px]">
+              <label className="block text-sm text-gray-400 mb-1">Personne</label>
+              <div className="relative">
+                <Users className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <select
+                  value={selectedPerson || ''}
+                  onChange={(e) => setSelectedPerson(e.target.value || null)}
+                  className="w-full bg-gray-900 border border-gray-700 rounded-lg pl-9 pr-4 py-2 text-white focus:outline-none focus:border-rose-500 appearance-none cursor-pointer"
+                >
+                  <option value="">Toutes les personnes</option>
+                  {familyMembers.map((member) => (
+                    <option key={member.id} value={member.id}>{member.name}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Active filters */}
-        {(selectedTag || selectedMood) && (
+        {(selectedTag || selectedMood || selectedPerson) && (
           <div className="flex flex-wrap gap-2 items-center pt-2 border-t border-gray-700">
             <span className="text-sm text-gray-400">Actifs:</span>
             {selectedTag && (
@@ -441,6 +519,16 @@ export function ImageGallery({ themeId, themes, searchQuery, onImageUpdate }: Im
                 <X className="w-3 h-3" />
               </button>
             )}
+            {selectedPerson && (
+              <button
+                onClick={() => setSelectedPerson(null)}
+                className="flex items-center gap-1 px-2 py-1 bg-pink-500/20 text-pink-400 rounded text-sm hover:bg-pink-500/30"
+              >
+                <Users className="w-3 h-3" />
+                {familyMembers.find(m => m.id === selectedPerson)?.name || 'Personne'}
+                <X className="w-3 h-3" />
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -450,7 +538,7 @@ export function ImageGallery({ themeId, themes, searchQuery, onImageUpdate }: Im
         <div className="text-center py-20 text-gray-400">
           <p className="text-lg">Aucune image trouvée</p>
           <p className="text-sm mt-2">
-            {selectedTag || selectedMood || searchQuery
+            {selectedTag || selectedMood || selectedPerson || searchQuery
               ? 'Essayez de modifier les filtres de recherche'
               : 'Téléversez des images pour commencer'}
           </p>
@@ -682,35 +770,76 @@ export function ImageGallery({ themeId, themes, searchQuery, onImageUpdate }: Im
                 )}
 
                 {/* Detected People */}
-                {(loadingPeople || detectedPeople.length > 0) && (
+                {(loadingPeople || detectedPeople.length > 0 || familyMembers.length > 0) && (
                   <div className="mb-4">
                     <div className="flex items-center gap-1 text-sm text-gray-400 mb-2">
                       <Users className="w-4 h-4" />
-                      Personnes détectées
+                      Personnes
                     </div>
                     {loadingPeople ? (
                       <div className="text-sm text-gray-500">Chargement...</div>
                     ) : (
-                      <div className="flex flex-wrap gap-2">
-                        {detectedPeople.map((person) => (
-                          <div
-                            key={person.id}
-                            className="px-3 py-1.5 bg-gradient-to-r from-purple-500/20 to-pink-500/20 border border-purple-500/30 rounded-full text-sm"
-                          >
-                            <span className="text-purple-200 font-medium">
-                              {person.member?.name || 'Inconnu'}
-                            </span>
-                            {person.confidence !== null && person.confidence > 0 && (
-                              <span className="ml-2 px-1.5 py-0.5 bg-purple-600/60 text-purple-100 text-xs rounded-full font-semibold">
-                                {Math.round(person.confidence * 100)}%
+                      <>
+                        <div className="flex flex-wrap gap-2 mb-3">
+                          {detectedPeople.map((person) => (
+                            <div
+                              key={person.id}
+                              className="group relative px-3 py-1.5 bg-gradient-to-r from-purple-500/20 to-pink-500/20 hover:from-purple-500/40 hover:to-pink-500/40 border border-purple-500/30 hover:border-purple-400/50 rounded-full text-sm flex items-center gap-2 cursor-pointer transition-all"
+                              onClick={() => person.family_member_id && handlePersonClick(person.family_member_id)}
+                            >
+                              <span className="text-purple-200 font-medium">
+                                {person.member?.name || 'Inconnu'}
                               </span>
-                            )}
-                            {person.verified && (
-                              <span className="ml-1 text-green-400">✓</span>
-                            )}
+                              {person.confidence !== null && person.confidence > 0 && person.confidence < 1 && (
+                                <span className="px-1.5 py-0.5 bg-purple-600/60 text-purple-100 text-xs rounded-full font-semibold">
+                                  {Math.round(person.confidence * 100)}%
+                                </span>
+                              )}
+                              {person.verified && (
+                                <span className="text-green-400">✓</span>
+                              )}
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleRemovePerson(person.id);
+                                }}
+                                className="opacity-0 group-hover:opacity-100 transition-opacity text-red-400 hover:text-red-300"
+                                title="Retirer"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* Add person dropdown */}
+                        {familyMembers.length > 0 && (
+                          <div className="flex gap-2">
+                            <select
+                              value={selectedPersonToAdd}
+                              onChange={(e) => setSelectedPersonToAdd(e.target.value)}
+                              className="flex-1 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm"
+                              disabled={addingPerson}
+                            >
+                              <option value="">+ Ajouter une personne</option>
+                              {familyMembers
+                                .filter(member => !detectedPeople.some(p => p.family_member_id === member.id))
+                                .map(member => (
+                                  <option key={member.id} value={member.id}>
+                                    {member.name}
+                                  </option>
+                                ))}
+                            </select>
+                            <button
+                              onClick={handleAddPerson}
+                              disabled={!selectedPersonToAdd || addingPerson}
+                              className="px-3 py-1 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-700 disabled:cursor-not-allowed rounded text-sm transition-colors"
+                            >
+                              {addingPerson ? '...' : 'OK'}
+                            </button>
                           </div>
-                        ))}
-                      </div>
+                        )}
+                      </>
                     )}
                   </div>
                 )}

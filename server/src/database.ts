@@ -589,40 +589,48 @@ export const themeDb = {
 
 // Image operations
 export const imageDb = {
-  getAll(options: { theme_id?: string; limit?: number; offset?: number; search?: string; tag?: string; mood?: string } = {}): { images: Image[]; total: number } {
+  getAll(options: { theme_id?: string; limit?: number; offset?: number; search?: string; tag?: string; mood?: string; person?: string } = {}): { images: Image[]; total: number } {
+    let fromClause = 'images';
     let whereClause = '1=1';
     const params: any[] = [];
 
+    // If filtering by person, join with image_people table
+    if (options.person) {
+      fromClause = 'images INNER JOIN image_people ON images.id = image_people.image_id';
+      whereClause += ' AND image_people.family_member_id = ?';
+      params.push(options.person);
+    }
+
     if (options.theme_id) {
-      whereClause += ' AND theme_id = ?';
+      whereClause += ' AND images.theme_id = ?';
       params.push(options.theme_id);
     }
 
     if (options.search) {
-      whereClause += ' AND (title LIKE ? OR description LIKE ? OR tags LIKE ? OR filename LIKE ? OR original_name LIKE ?)';
+      whereClause += ' AND (images.title LIKE ? OR images.description LIKE ? OR images.tags LIKE ? OR images.filename LIKE ? OR images.original_name LIKE ?)';
       const searchTerm = `%${options.search}%`;
       params.push(searchTerm, searchTerm, searchTerm, searchTerm, searchTerm);
     }
 
     if (options.tag) {
-      whereClause += ' AND tags LIKE ?';
+      whereClause += ' AND images.tags LIKE ?';
       params.push(`%${options.tag}%`);
     }
 
     if (options.mood) {
-      whereClause += ' AND mood = ?';
+      whereClause += ' AND images.mood = ?';
       params.push(options.mood);
     }
 
-    const total = db.prepare(`SELECT COUNT(*) as count FROM images WHERE ${whereClause}`).get(...params) as { count: number };
+    const total = db.prepare(`SELECT COUNT(DISTINCT images.id) as count FROM ${fromClause} WHERE ${whereClause}`).get(...params) as { count: number };
 
     const limit = options.limit || 50;
     const offset = options.offset || 0;
 
     const images = db.prepare(`
-      SELECT * FROM images
+      SELECT DISTINCT images.* FROM ${fromClause}
       WHERE ${whereClause}
-      ORDER BY created_at DESC
+      ORDER BY images.created_at DESC
       LIMIT ? OFFSET ?
     `).all(...params, limit, offset) as Image[];
 

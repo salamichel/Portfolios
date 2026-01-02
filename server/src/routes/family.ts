@@ -300,6 +300,58 @@ router.get('/images/:imageId/people', (req, res) => {
   }
 });
 
+// Manually add a person to an image
+router.post('/images/:imageId/people', (req, res) => {
+  try {
+    const { family_member_id } = req.body;
+    const { imageId } = req.params;
+
+    if (!family_member_id) {
+      return res.status(400).json({ error: 'family_member_id is required' });
+    }
+
+    // Verify image exists
+    const image = imageDb.getById(imageId);
+    if (!image) {
+      return res.status(404).json({ error: 'Image not found' });
+    }
+
+    // Verify family member exists
+    const member = familyMemberDb.getById(family_member_id);
+    if (!member) {
+      return res.status(404).json({ error: 'Family member not found' });
+    }
+
+    // Check if this person is already tagged in this image
+    const existing = imagePeopleDb.getByImageId(imageId);
+    if (existing.some(p => p.family_member_id === family_member_id)) {
+      return res.status(409).json({ error: 'This person is already tagged in this image' });
+    }
+
+    const person: Omit<ImagePerson, 'created_at' | 'updated_at'> = {
+      id: uuidv4(),
+      image_id: imageId,
+      family_member_id,
+      confidence: 1.0, // Manual tag = 100% confidence
+      bounding_box: null,
+      verified: true
+    };
+
+    const created = imagePeopleDb.create(person);
+
+    // Enrich with member data
+    const enriched = {
+      ...created,
+      member
+    };
+
+    res.status(201).json(enriched);
+  } catch (error) {
+    console.error('Error adding person to image:', error);
+    res.status(500).json({ error: 'Failed to add person to image' });
+  }
+});
+
 // Update detected person (e.g., verify or correct identification)
 router.put('/people/:id', (req, res) => {
   try {

@@ -57,14 +57,15 @@ const upload = multer({
 // Get all images with pagination
 router.get('/', (req, res) => {
   try {
-    const { theme_id, limit, offset, search, tag, mood } = req.query;
+    const { theme_id, limit, offset, search, tag, mood, person } = req.query;
     const result = imageDb.getAll({
       theme_id: theme_id as string,
       limit: limit ? parseInt(limit as string) : 50,
       offset: offset ? parseInt(offset as string) : 0,
       search: search as string,
       tag: tag as string,
-      mood: mood as string
+      mood: mood as string,
+      person: person as string
     });
     res.json(result);
   } catch (error) {
