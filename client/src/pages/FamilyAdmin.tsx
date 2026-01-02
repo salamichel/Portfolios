@@ -10,10 +10,8 @@ export default function FamilyAdmin() {
   const [trainingImages, setTrainingImages] = useState<TrainingImage[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isAddingMember, setIsAddingMember] = useState(false);
-  const [isAddingTraining, setIsAddingTraining] = useState(false);
+  const [isUploadingTraining, setIsUploadingTraining] = useState(false);
   const [newMember, setNewMember] = useState({ name: '', relationship: '', notes: '' });
-  const [availableImages, setAvailableImages] = useState<Image[]>([]);
-  const [selectedImageForTraining, setSelectedImageForTraining] = useState<string>('');
 
   useEffect(() => {
     loadMembers();
@@ -46,15 +44,6 @@ export default function FamilyAdmin() {
     }
   };
 
-  const loadAvailableImages = async () => {
-    try {
-      const response = await api.get('/images?limit=50');
-      setAvailableImages(response.data.images || []);
-    } catch (error) {
-      console.error('Failed to load available images:', error);
-    }
-  };
-
   const handleCreateMember = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -84,23 +73,35 @@ export default function FamilyAdmin() {
     }
   };
 
-  const handleAddTrainingImage = async () => {
-    if (!selectedMember || !selectedImageForTraining) return;
+  const handleUploadTrainingImages = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!selectedMember || !e.target.files || e.target.files.length === 0) return;
 
     try {
-      await api.post('/family/training-images', {
-        image_id: selectedImageForTraining,
-        family_member_id: selectedMember.id,
-        verified: true
+      setIsUploadingTraining(true);
+
+      const formData = new FormData();
+      formData.append('family_member_id', selectedMember.id);
+
+      Array.from(e.target.files).forEach(file => {
+        formData.append('images', file);
+      });
+
+      await api.post('/family/training-images/upload', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
       });
 
       loadTrainingImages(selectedMember.id);
       loadMembers(); // Refresh counts
-      setIsAddingTraining(false);
-      setSelectedImageForTraining('');
+
+      // Reset file input
+      e.target.value = '';
     } catch (error) {
-      console.error('Failed to add training image:', error);
-      alert('Échec de l\'ajout de l\'image d\'entraînement');
+      console.error('Failed to upload training images:', error);
+      alert('Échec de l\'upload des images d\'entraînement');
+    } finally {
+      setIsUploadingTraining(false);
     }
   };
 
@@ -280,56 +281,21 @@ export default function FamilyAdmin() {
                     <h2 className="text-xl font-semibold">{selectedMember.name}</h2>
                     <p className="text-sm text-slate-400">{selectedMember.relationship}</p>
                   </div>
-                  <button
-                    onClick={() => {
-                      setIsAddingTraining(true);
-                      loadAvailableImages();
-                    }}
-                    className="px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded transition-colors text-sm"
-                  >
-                    + Ajouter une photo
-                  </button>
+                  <label className="px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded transition-colors text-sm cursor-pointer">
+                    {isUploadingTraining ? '⏳ Upload en cours...' : '+ Ajouter des photos'}
+                    <input
+                      type="file"
+                      multiple
+                      accept="image/jpeg,image/png,image/gif,image/webp"
+                      onChange={handleUploadTrainingImages}
+                      disabled={isUploadingTraining}
+                      className="hidden"
+                    />
+                  </label>
                 </div>
 
                 {selectedMember.notes && (
                   <p className="text-sm text-slate-300 mb-4 p-3 bg-slate-800 rounded">{selectedMember.notes}</p>
-                )}
-
-                {/* Add training image form */}
-                {isAddingTraining && (
-                  <div className="mb-4 p-4 bg-slate-800 rounded border border-slate-700">
-                    <h3 className="font-semibold mb-2">Sélectionnez une image</h3>
-                    <select
-                      value={selectedImageForTraining}
-                      onChange={(e) => setSelectedImageForTraining(e.target.value)}
-                      className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded mb-2"
-                    >
-                      <option value="">-- Choisir une image --</option>
-                      {availableImages.map((img) => (
-                        <option key={img.id} value={img.id}>
-                          {img.title || img.original_name}
-                        </option>
-                      ))}
-                    </select>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={handleAddTrainingImage}
-                        disabled={!selectedImageForTraining}
-                        className="px-3 py-1 bg-green-600 hover:bg-green-700 rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        Ajouter
-                      </button>
-                      <button
-                        onClick={() => {
-                          setIsAddingTraining(false);
-                          setSelectedImageForTraining('');
-                        }}
-                        className="px-3 py-1 bg-slate-700 hover:bg-slate-600 rounded text-sm"
-                      >
-                        Annuler
-                      </button>
-                    </div>
-                  </div>
                 )}
 
                 {/* Training images grid */}
@@ -342,8 +308,8 @@ export default function FamilyAdmin() {
                     trainingImages.map((training) => (
                       <div key={training.id} className="relative group">
                         <img
-                          src={`/thumbnails/${training.image?.filename}.webp`}
-                          alt="Training"
+                          src={`/uploads/training/thumbnails/thumb_${training.filename}.webp`}
+                          alt={training.original_name}
                           className="w-full aspect-square object-cover rounded border border-slate-700"
                         />
                         <button

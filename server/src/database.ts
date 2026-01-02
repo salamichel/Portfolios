@@ -165,19 +165,20 @@ db.exec(`
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 
-  -- Training images (images labeled with people for AI training)
+  -- Training images (uploaded photos for AI training - independent from gallery)
   CREATE TABLE IF NOT EXISTS training_images (
     id TEXT PRIMARY KEY,
-    image_id TEXT NOT NULL,
+    filename TEXT NOT NULL,
+    original_name TEXT NOT NULL,
     family_member_id TEXT NOT NULL,
+    size INTEGER,
+    mime_type TEXT,
     bounding_box TEXT,
     verified BOOLEAN DEFAULT FALSE,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (image_id) REFERENCES images(id) ON DELETE CASCADE,
     FOREIGN KEY (family_member_id) REFERENCES family_members(id) ON DELETE CASCADE
   );
 
-  CREATE INDEX IF NOT EXISTS idx_training_images_image ON training_images(image_id);
   CREATE INDEX IF NOT EXISTS idx_training_images_member ON training_images(family_member_id);
 
   -- Image people (detected people in images by AI)
@@ -242,6 +243,41 @@ try {
   db.exec(`ALTER TABLE books ADD COLUMN status TEXT DEFAULT 'draft'`);
 } catch {
   // Column already exists, ignore error
+}
+
+// Migration: Update training_images to use direct file storage instead of image_id
+try {
+  // Check if old schema exists (has image_id column)
+  const tableInfo = db.prepare("PRAGMA table_info(training_images)").all() as Array<{ name: string }>;
+  const hasImageId = tableInfo.some(col => col.name === 'image_id');
+
+  if (hasImageId) {
+    // Drop and recreate with new schema
+    db.exec(`
+      DROP TABLE IF EXISTS training_images_old;
+      ALTER TABLE training_images RENAME TO training_images_old;
+
+      CREATE TABLE training_images (
+        id TEXT PRIMARY KEY,
+        filename TEXT NOT NULL,
+        original_name TEXT NOT NULL,
+        family_member_id TEXT NOT NULL,
+        size INTEGER,
+        mime_type TEXT,
+        bounding_box TEXT,
+        verified BOOLEAN DEFAULT FALSE,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (family_member_id) REFERENCES family_members(id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX idx_training_images_member ON training_images(family_member_id);
+
+      DROP TABLE training_images_old;
+    `);
+    console.log('[Migration] Updated training_images schema to use direct file storage');
+  }
+} catch (error) {
+  console.error('[Migration] Failed to update training_images schema:', error);
 }
 
 export interface Theme {
@@ -460,8 +496,11 @@ export interface BoundingBox {
 
 export interface TrainingImage {
   id: string;
-  image_id: string;
+  filename: string;
+  original_name: string;
   family_member_id: string;
+  size: number | null;
+  mime_type: string | null;
   bounding_box: string | null; // JSON string of BoundingBox
   verified: boolean;
   created_at: string;
@@ -1733,10 +1772,6 @@ export const trainingImageDb = {
     return db.prepare('SELECT * FROM training_images ORDER BY created_at DESC').all() as TrainingImage[];
   },
 
-  getByImageId(imageId: string): TrainingImage[] {
-    return db.prepare('SELECT * FROM training_images WHERE image_id = ?').all(imageId) as TrainingImage[];
-  },
-
   getByMemberId(memberId: string): TrainingImage[] {
     return db.prepare('SELECT * FROM training_images WHERE family_member_id = ?').all(memberId) as TrainingImage[];
   },
@@ -1747,9 +1782,18 @@ export const trainingImageDb = {
 
   create(training: Omit<TrainingImage, 'created_at'>): TrainingImage {
     db.prepare(`
-      INSERT INTO training_images (id, image_id, family_member_id, bounding_box, verified)
-      VALUES (?, ?, ?, ?, ?)
-    `).run(training.id, training.image_id, training.family_member_id, training.bounding_box, training.verified);
+      INSERT INTO training_images (id, filename, original_name, family_member_id, size, mime_type, bounding_box, verified)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      training.id,
+      training.filename,
+      training.original_name,
+      training.family_member_id,
+      training.size,
+      training.mime_type,
+      training.bounding_box,
+      training.verified
+    );
     return this.getById(training.id)!;
   },
 
@@ -1775,11 +1819,6 @@ export const trainingImageDb = {
 
   delete(id: string): boolean {
     const result = db.prepare('DELETE FROM training_images WHERE id = ?').run(id);
-    return result.changes > 0;
-  },
-
-  deleteByImageId(imageId: string): boolean {
-    const result = db.prepare('DELETE FROM training_images WHERE image_id = ?').run(imageId);
     return result.changes > 0;
   }
 };

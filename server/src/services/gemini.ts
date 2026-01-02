@@ -560,25 +560,22 @@ function buildTrainingExamplesPrompt(members: FamilyMember[], uploadsDir: string
       const selectedTraining = trainingImages.slice(0, 3);
 
       for (const training of selectedTraining) {
-        const image = imageDb.getById(training.image_id);
-        if (image) {
-          const imagePath = path.join(uploadsDir, 'optimized', `${image.filename}.webp`);
+        const imagePath = path.join(uploadsDir, 'training', `${training.filename}.webp`);
 
-          if (fs.existsSync(imagePath)) {
-            try {
-              const imageBuffer = fs.readFileSync(imagePath);
-              const base64Image = imageBuffer.toString('base64');
-              images.push({
-                inlineData: {
-                  mimeType: 'image/webp',
-                  data: base64Image
-                }
-              });
-              prompt += `  - Exemple ${exampleIndex} (voir image ci-dessous)\n`;
-              exampleIndex++;
-            } catch (error) {
-              console.error(`Failed to load training image ${imagePath}:`, error);
-            }
+        if (fs.existsSync(imagePath)) {
+          try {
+            const imageBuffer = fs.readFileSync(imagePath);
+            const base64Image = imageBuffer.toString('base64');
+            images.push({
+              inlineData: {
+                mimeType: 'image/webp',
+                data: base64Image
+              }
+            });
+            prompt += `  - Exemple ${exampleIndex} (voir image ci-dessous)\n`;
+            exampleIndex++;
+          } catch (error) {
+            console.error(`Failed to load training image ${imagePath}:`, error);
           }
         }
       }

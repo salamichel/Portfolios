@@ -201,12 +201,14 @@ export interface BoundingBox {
 
 export interface TrainingImage {
   id: string;
-  image_id: string;
+  filename: string;
+  original_name: string;
   family_member_id: string;
+  size: number | null;
+  mime_type: string | null;
   bounding_box: string | null;
   verified: boolean;
   created_at: string;
-  image?: Image;
   member?: FamilyMember;
 }
 

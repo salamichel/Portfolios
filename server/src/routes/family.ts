@@ -1,10 +1,49 @@
 import { Router } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import path from 'path';
+import multer from 'multer';
+import sharp from 'sharp';
+import fs from 'fs';
 import { familyMemberDb, trainingImageDb, imagePeopleDb, imageDb, FamilyMember, TrainingImage, ImagePerson } from '../database.js';
 import { recognizePeople } from '../services/gemini.js';
 
 const router = Router();
+
+// Setup training image directories
+const BASE_DIR = process.env.BASE_DIR || process.cwd();
+const uploadsDir = path.join(BASE_DIR, 'uploads');
+const trainingDir = path.join(uploadsDir, 'training');
+const trainingThumbsDir = path.join(trainingDir, 'thumbnails');
+
+// Ensure directories exist
+[trainingDir, trainingThumbsDir].forEach(dir => {
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+});
+
+// Configure multer for training image uploads
+const upload = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => cb(null, trainingDir),
+    filename: (req, file, cb) => {
+      const uniqueId = uuidv4();
+      const ext = path.extname(file.originalname);
+      cb(null, `${uniqueId}${ext}`);
+    }
+  }),
+  limits: {
+    fileSize: 50 * 1024 * 1024 // 50MB
+  },
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid file type. Only JPEG, PNG, GIF, and WebP are allowed.'));
+    }
+  }
+});
 
 // Get all family members
 router.get('/members', (req, res) => {
@@ -111,36 +150,25 @@ router.delete('/members/:id', (req, res) => {
 router.get('/members/:id/training-images', (req, res) => {
   try {
     const trainingImages = trainingImageDb.getByMemberId(req.params.id);
-
-    // Enrich with image data
-    const enriched = trainingImages.map(ti => {
-      const image = imageDb.getById(ti.image_id);
-      return {
-        ...ti,
-        image
-      };
-    });
-
-    res.json(enriched);
+    res.json(trainingImages);
   } catch (error) {
     console.error('Error fetching training images:', error);
     res.status(500).json({ error: 'Failed to fetch training images' });
   }
 });
 
-// Add a training image for a member
-router.post('/training-images', (req, res) => {
+// Upload training images for a member
+router.post('/training-images/upload', upload.array('images', 10), async (req, res) => {
   try {
-    const { image_id, family_member_id, bounding_box, verified } = req.body;
+    const { family_member_id } = req.body;
+    const files = req.files as Express.Multer.File[];
 
-    if (!image_id || !family_member_id) {
-      return res.status(400).json({ error: 'image_id and family_member_id are required' });
+    if (!family_member_id) {
+      return res.status(400).json({ error: 'family_member_id is required' });
     }
 
-    // Verify image exists
-    const image = imageDb.getById(image_id);
-    if (!image) {
-      return res.status(404).json({ error: 'Image not found' });
+    if (!files || files.length === 0) {
+      return res.status(400).json({ error: 'No images uploaded' });
     }
 
     // Verify family member exists
@@ -149,19 +177,55 @@ router.post('/training-images', (req, res) => {
       return res.status(404).json({ error: 'Family member not found' });
     }
 
-    const training: Omit<TrainingImage, 'created_at'> = {
-      id: uuidv4(),
-      image_id,
-      family_member_id,
-      bounding_box: bounding_box ? JSON.stringify(bounding_box) : null,
-      verified: verified || false
-    };
+    const createdTrainingImages: TrainingImage[] = [];
 
-    const created = trainingImageDb.create(training);
-    res.status(201).json(created);
+    // Process each uploaded file
+    for (const file of files) {
+      try {
+        const filenameWithoutExt = path.parse(file.filename).name;
+        const webpFilename = `${filenameWithoutExt}.webp`;
+        const webpPath = path.join(trainingDir, webpFilename);
+        const thumbPath = path.join(trainingThumbsDir, `thumb_${webpFilename}`);
+
+        // Convert to WebP
+        await sharp(file.path)
+          .webp({ quality: 90 })
+          .toFile(webpPath);
+
+        // Create thumbnail
+        await sharp(file.path)
+          .resize(400, 400, { fit: 'cover' })
+          .webp({ quality: 80 })
+          .toFile(thumbPath);
+
+        // Delete original file if not WebP
+        if (path.extname(file.filename).toLowerCase() !== '.webp') {
+          fs.unlinkSync(file.path);
+        }
+
+        // Save to database
+        const training: Omit<TrainingImage, 'created_at'> = {
+          id: uuidv4(),
+          filename: filenameWithoutExt,
+          original_name: file.originalname,
+          family_member_id,
+          size: file.size,
+          mime_type: file.mimetype,
+          bounding_box: null,
+          verified: false
+        };
+
+        const created = trainingImageDb.create(training);
+        createdTrainingImages.push(created);
+      } catch (error) {
+        console.error(`Error processing file ${file.originalname}:`, error);
+      }
+    }
+
+    res.status(201).json(createdTrainingImages);
   } catch (error) {
-    console.error('Error creating training image:', error);
-    res.status(500).json({ error: 'Failed to create training image' });
+    console.error('Error uploading training images:', error);
+    res.status(500).json({ error: 'Failed to upload training images' });
   }
 });
 
@@ -190,35 +254,28 @@ router.put('/training-images/:id', (req, res) => {
 // Delete a training image
 router.delete('/training-images/:id', (req, res) => {
   try {
-    const deleted = trainingImageDb.delete(req.params.id);
-    if (!deleted) {
+    const existing = trainingImageDb.getById(req.params.id);
+    if (!existing) {
       return res.status(404).json({ error: 'Training image not found' });
     }
+
+    // Delete files from disk
+    const webpPath = path.join(trainingDir, `${existing.filename}.webp`);
+    const thumbPath = path.join(trainingThumbsDir, `thumb_${existing.filename}.webp`);
+
+    if (fs.existsSync(webpPath)) {
+      fs.unlinkSync(webpPath);
+    }
+    if (fs.existsSync(thumbPath)) {
+      fs.unlinkSync(thumbPath);
+    }
+
+    // Delete from database
+    trainingImageDb.delete(req.params.id);
     res.status(204).send();
   } catch (error) {
     console.error('Error deleting training image:', error);
     res.status(500).json({ error: 'Failed to delete training image' });
-  }
-});
-
-// Get training images for a specific image
-router.get('/images/:imageId/training', (req, res) => {
-  try {
-    const trainingImages = trainingImageDb.getByImageId(req.params.imageId);
-
-    // Enrich with member data
-    const enriched = trainingImages.map(ti => {
-      const member = familyMemberDb.getById(ti.family_member_id);
-      return {
-        ...ti,
-        member
-      };
-    });
-
-    res.json(enriched);
-  } catch (error) {
-    console.error('Error fetching training images:', error);
-    res.status(500).json({ error: 'Failed to fetch training images' });
   }
 });
 
