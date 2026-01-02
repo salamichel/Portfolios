@@ -5,6 +5,8 @@ const api = axios.create({
   baseURL: '/api'
 });
 
+export { api };
+
 // Themes API
 export const themesApi = {
   getAll: () => api.get<Theme[]>('/themes').then(res => res.data),

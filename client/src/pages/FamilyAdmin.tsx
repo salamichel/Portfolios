@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
-import { FamilyMember, TrainingImage, Image } from '../types';
+import type { FamilyMember, TrainingImage, Image } from '../types';
 
 export default function FamilyAdmin() {
   const navigate = useNavigate();

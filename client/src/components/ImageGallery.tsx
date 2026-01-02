@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Loader2, Sparkles, Trash2, X, ChevronLeft, ChevronRight, Tag, Pencil, Save, XCircle, Info, Smile, BookOpen, Check, Users } from 'lucide-react';
-import { imagesApi, getMediumImageUrl, getThumbnailUrl } from '../api/client';
+import { imagesApi, getMediumImageUrl, getThumbnailUrl, api } from '../api/client';
 import type { Image, Theme, TagWithCount, MoodWithCount, ImagePerson } from '../types';
 import { CreateBookFromPhotoModal } from './book/CreateBookFromPhotoModal';
 import { CreateBookFromPhotosModal } from './book/CreateBookFromPhotosModal';
@@ -168,7 +168,7 @@ export function ImageGallery({ themeId, themes, searchQuery, onImageUpdate }: Im
     const loadPeople = async () => {
       setLoadingPeople(true);
       try {
-        const response = await imagesApi.api.get(`/api/family/images/${selectedImage.id}/people`);
+        const response = await api.get(`/api/family/images/${selectedImage.id}/people`);
         setDetectedPeople(response.data);
       } catch (error) {
         console.error('Failed to load detected people:', error);
