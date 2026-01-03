@@ -512,14 +512,21 @@ router.post('/batch-recognize', async (req, res) => {
     if (save) {
       let savedCount = 0;
       for (const result of allResults) {
-        console.log(`[Batch Save] Processing image ${result.image_id}: ${result.people.length} people detected`);
+        // Get image info for better logging
+        const image = imageDb.getById(result.image_id);
+        const imageName = image?.filename || result.image_id;
+
+        console.log(`[Batch Save] 📸 Image: "${imageName}" → ${result.people.length} personne(s) détectée(s)`);
 
         // Delete existing detections
         imagePeopleDb.deleteByImageId(result.image_id);
 
         // Save new detections
         for (const person of result.people) {
-          console.log(`[Batch Save]   - Saving person: family_member_id=${person.family_member_id}, confidence=${person.confidence}`);
+          const member = familyMemberDb.getById(person.family_member_id);
+          const memberName = member?.name || 'Inconnu';
+
+          console.log(`[Batch Save]   👤 ${memberName} (confiance: ${Math.round(person.confidence * 100)}%)`);
 
           const personRecord = {
             id: uuidv4(),
@@ -530,12 +537,11 @@ router.post('/batch-recognize', async (req, res) => {
             verified: false
           };
 
-          const saved = imagePeopleDb.create(personRecord);
-          console.log(`[Batch Save]   - Saved with ID: ${saved.id}`);
+          imagePeopleDb.create(personRecord);
           savedCount++;
         }
       }
-      console.log(`[Batch Save] Total saved: ${savedCount} person records`);
+      console.log(`[Batch Save] ✅ Total sauvegardé: ${savedCount} détections`);
     }
 
     const totalPeople = allResults.reduce((sum, r) => sum + r.people.length, 0);

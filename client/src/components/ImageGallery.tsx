@@ -184,12 +184,16 @@ export function ImageGallery({ themeId, themes, searchQuery, onImageUpdate }: Im
     }
 
     const loadPeople = async () => {
+      console.log(`[Frontend] Loading people for image: ${selectedImage.filename} (${selectedImage.id})`);
       setLoadingPeople(true);
       try {
-        const response = await api.get(`/api/family/images/${selectedImage.id}/people`);
+        const url = `/family/images/${selectedImage.id}/people`;
+        console.log(`[Frontend] Calling API: GET ${url}`);
+        const response = await api.get(url);
+        console.log(`[Frontend] Received ${response.data.length} people:`, response.data);
         setDetectedPeople(response.data);
       } catch (error) {
-        console.error('Failed to load detected people:', error);
+        console.error('[Frontend] Failed to load detected people:', error);
         setDetectedPeople([]);
       } finally {
         setLoadingPeople(false);
