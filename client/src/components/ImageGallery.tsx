@@ -51,6 +51,7 @@ export function ImageGallery({ themeId, themes, searchQuery, onImageUpdate }: Im
   const loadImages = useCallback(async (reset = false) => {
     if (loading) return;
 
+    console.log(`[loadImages] Called with reset=${reset}, selectedPerson=${selectedPerson}`);
     setLoading(true);
     try {
       const offset = reset ? 0 : images.length;
@@ -63,6 +64,8 @@ export function ImageGallery({ themeId, themes, searchQuery, onImageUpdate }: Im
         mood: selectedMood || undefined,
         person: selectedPerson || undefined
       });
+
+      console.log(`[loadImages] Received ${result.images.length} images (total: ${result.total})`);
 
       // Sort images by original_name (filename) in ascending order
       const sortedImages = result.images.sort((a, b) =>
@@ -88,7 +91,7 @@ export function ImageGallery({ themeId, themes, searchQuery, onImageUpdate }: Im
     } finally {
       setLoading(false);
     }
-  }, [themeId, searchQuery, selectedTag, selectedMood, images.length, loading]);
+  }, [themeId, searchQuery, selectedTag, selectedMood, selectedPerson, images.length, loading]);
 
   // Load tags and moods with counts
   useEffect(() => {
