@@ -596,8 +596,14 @@ export const imageDb = {
 
     console.log(`[imageDb.getAll] Options:`, JSON.stringify(options));
 
-    // If filtering by person, join with image_people table
-    if (options.person) {
+    // Handle person filter
+    if (options.person === 'none') {
+      // Images WITHOUT any detected person (LEFT JOIN + IS NULL)
+      fromClause = 'images LEFT JOIN image_people ON images.id = image_people.image_id';
+      whereClause += ' AND image_people.id IS NULL';
+      console.log(`[imageDb.getAll] Filtering by: NO person detected`);
+    } else if (options.person) {
+      // Images WITH a specific person (INNER JOIN)
       fromClause = 'images INNER JOIN image_people ON images.id = image_people.image_id';
       whereClause += ' AND image_people.family_member_id = ?';
       params.push(options.person);

@@ -493,6 +493,7 @@ export function ImageGallery({ themeId, themes, searchQuery, onImageUpdate }: Im
                   className="w-full bg-gray-900 border border-gray-700 rounded-lg pl-9 pr-4 py-2 text-white focus:outline-none focus:border-rose-500 appearance-none cursor-pointer"
                 >
                   <option value="">Toutes les personnes</option>
+                  <option value="none">Sans personne identifiée</option>
                   {familyMembers.map((member) => (
                     <option key={member.id} value={member.id}>{member.name}</option>
                   ))}
@@ -532,7 +533,9 @@ export function ImageGallery({ themeId, themes, searchQuery, onImageUpdate }: Im
                 className="flex items-center gap-1 px-2 py-1 bg-pink-500/20 text-pink-400 rounded text-sm hover:bg-pink-500/30"
               >
                 <Users className="w-3 h-3" />
-                {familyMembers.find(m => m.id === selectedPerson)?.name || 'Personne'}
+                {selectedPerson === 'none'
+                  ? 'Sans personne'
+                  : familyMembers.find(m => m.id === selectedPerson)?.name || 'Personne'}
                 <X className="w-3 h-3" />
               </button>
             )}
