@@ -282,17 +282,23 @@ router.delete('/training-images/:id', (req, res) => {
 // Get detected people for a specific image
 router.get('/images/:imageId/people', (req, res) => {
   try {
-    const people = imagePeopleDb.getByImageId(req.params.imageId);
+    const imageId = req.params.imageId;
+    console.log(`[GET People] Fetching people for image: ${imageId}`);
+
+    const people = imagePeopleDb.getByImageId(imageId);
+    console.log(`[GET People] Found ${people.length} records in DB`);
 
     // Enrich with member data
-    const enriched = people.map(p => {
+    const enriched = people.map((p, index) => {
       const member = p.family_member_id ? familyMemberDb.getById(p.family_member_id) : null;
+      console.log(`[GET People]   ${index + 1}. family_member_id=${p.family_member_id}, member_name=${member?.name || 'NULL'}, confidence=${p.confidence}`);
       return {
         ...p,
         member
       };
     });
 
+    console.log(`[GET People] Returning ${enriched.length} enriched records`);
     res.json(enriched);
   } catch (error) {
     console.error('Error fetching detected people:', error);
@@ -504,22 +510,32 @@ router.post('/batch-recognize', async (req, res) => {
 
     // Save to database if requested
     if (save) {
+      let savedCount = 0;
       for (const result of allResults) {
+        console.log(`[Batch Save] Processing image ${result.image_id}: ${result.people.length} people detected`);
+
         // Delete existing detections
         imagePeopleDb.deleteByImageId(result.image_id);
 
         // Save new detections
         for (const person of result.people) {
-          imagePeopleDb.create({
+          console.log(`[Batch Save]   - Saving person: family_member_id=${person.family_member_id}, confidence=${person.confidence}`);
+
+          const personRecord = {
             id: uuidv4(),
             image_id: result.image_id,
             family_member_id: person.family_member_id,
             confidence: person.confidence,
             bounding_box: person.bounding_box ? JSON.stringify(person.bounding_box) : null,
             verified: false
-          });
+          };
+
+          const saved = imagePeopleDb.create(personRecord);
+          console.log(`[Batch Save]   - Saved with ID: ${saved.id}`);
+          savedCount++;
         }
       }
+      console.log(`[Batch Save] Total saved: ${savedCount} person records`);
     }
 
     const totalPeople = allResults.reduce((sum, r) => sum + r.people.length, 0);
