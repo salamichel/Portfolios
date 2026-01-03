@@ -150,6 +150,9 @@ export async function generateBookPdf(options: GeneratePdfOptions): Promise<PdfR
   const pageWidth = pageMode === 'spread' ? formatConfig.spreadWidth : formatConfig.singleWidth;
   const pageHeight = pageMode === 'spread' ? formatConfig.spreadHeight : formatConfig.singleHeight;
 
+  console.log(`\n=== PDF Generation Debug ===`);
+  console.log(`Book: ${book.name}, Pages: ${pages.length}, Mode: ${pageMode}`);
+
   return new Promise(async (resolve, reject) => {
     try {
       const doc = new PDFDocument({
@@ -164,21 +167,45 @@ export async function generateBookPdf(options: GeneratePdfOptions): Promise<PdfR
       // Process each page
       for (let i = 0; i < pages.length; i++) {
         const page = pages[i];
+        const template = page.template;
+        const slots = template?.layout?.slots || [];
+        const pageData = page.page_data;
+
+        console.log(`\n--- Page ${i + 1} (position: ${page.position}) ---`);
+        console.log(`  Template: ${template?.name || 'none'}`);
+        console.log(`  Slots in template: ${slots.length}`);
+        console.log(`  Slots data: ${pageData?.slots?.length || 0}`);
+        console.log(`  Images loaded: ${page.images?.length || 0}`);
+
+        // Debug each slot
+        for (const slot of slots) {
+          const slotData = pageData?.slots?.find(s => s.slot_id === slot.id);
+          const hasImage = slotData && page.images?.some(img => img.id === slotData.image_id);
+          console.log(`    Slot ${slot.id}: type=${slot.type}, page=${slot.page}, width=${slot.width}, hasData=${!!slotData}, hasImage=${hasImage}`);
+        }
 
         // Skip pages without any actual content
-        if (!pageHasContent(page)) {
+        const hasContent = pageHasContent(page);
+        console.log(`  pageHasContent: ${hasContent}`);
+
+        if (!hasContent) {
+          console.log(`  SKIPPED (no content)`);
           continue;
         }
 
         if (pageMode === 'spread') {
           // One PDF page per spread (double page)
+          console.log(`  Adding SPREAD page`);
           doc.addPage();
           await renderSpread(doc, page, formatConfig, pageWidth, pageHeight);
         } else {
           // Two PDF pages per spread (left then right)
+          console.log(`  Rendering SINGLE pages`);
           await renderSinglePages(doc, page, formatConfig);
         }
       }
+
+      console.log(`\n=== PDF Generation Complete ===\n`);
 
       doc.end();
 
@@ -305,11 +332,18 @@ async function renderSinglePages(
   const leftSlots = slots.filter(s => s.page === 'left' || s.width > 100);
   const rightSlots = [...slots.filter(s => s.page === 'right'), ...spanningSlots];
 
+  console.log(`    [Single] spanningSlots: ${spanningSlots.length}, leftSlots: ${leftSlots.length}, rightSlots: ${rightSlots.length}`);
+
   const pageWidth = formatConfig.singleWidth;
   const pageHeight = formatConfig.singleHeight;
 
+  const leftHasContent = sideHasContent(slots, 'left', pageData, imageMap);
+  const rightHasContent = sideHasContent(slots, 'right', pageData, imageMap);
+  console.log(`    [Single] leftHasContent: ${leftHasContent}, rightHasContent: ${rightHasContent}`);
+
   // Render left page only if it has content
-  if (leftSlots.length > 0 && sideHasContent(slots, 'left', pageData, imageMap)) {
+  if (leftSlots.length > 0 && leftHasContent) {
+    console.log(`    [Single] Adding LEFT page`);
     doc.addPage({ size: [pageWidth, pageHeight] });
     for (const slot of leftSlots) {
       const position = getSlotPositionSingle(slot, 'left', pageWidth, pageHeight);
@@ -322,7 +356,8 @@ async function renderSinglePages(
   }
 
   // Render right page only if it has content
-  if (rightSlots.length > 0 && sideHasContent(slots, 'right', pageData, imageMap)) {
+  if (rightSlots.length > 0 && rightHasContent) {
+    console.log(`    [Single] Adding RIGHT page`);
     doc.addPage({ size: [pageWidth, pageHeight] });
     for (const slot of rightSlots) {
       const position = getSlotPositionSingle(slot, 'right', pageWidth, pageHeight);
@@ -340,6 +375,9 @@ interface SlotPosition {
   y: number;
   width: number;
   height: number;
+  // For spanning slots in single-page mode
+  spanningHalf?: 'left' | 'right';
+  fullSpreadWidth?: number;
 }
 
 function getSlotPositionSpread(slot: LayoutSlot, pageWidth: number, pageHeight: number): SlotPosition {
@@ -371,9 +409,15 @@ function getSlotPositionSingle(slot: LayoutSlot, targetPage: 'left' | 'right', p
   const isSpanning = slot.width > 100;
 
   let x: number, width: number;
+  let spanningHalf: 'left' | 'right' | undefined;
+  let fullSpreadWidth: number | undefined;
 
   if (isSpanning) {
-    // Spanning slot: on left page, show left half; on right page, show right half
+    // Spanning slot: render as if on full spread, then clip to show only left or right half
+    spanningHalf = targetPage;
+    fullSpreadWidth = pageWidth * 2; // Full spread width
+
+    // The visible area on this page
     if (targetPage === 'left') {
       x = (slot.x / 100) * pageWidth;
       width = Math.min(100, slot.width) / 100 * pageWidth;
@@ -389,7 +433,7 @@ function getSlotPositionSingle(slot: LayoutSlot, targetPage: 'left' | 'right', p
   const y = (slot.y / 100) * pageHeight;
   const height = (slot.height / 100) * pageHeight;
 
-  return { x, y, width, height };
+  return { x, y, width, height, spanningHalf, fullSpreadWidth };
 }
 
 async function renderImageSlot(
@@ -400,26 +444,38 @@ async function renderImageSlot(
   position: SlotPosition
 ): Promise<void> {
   const slotData = pageData?.slots?.find(s => s.slot_id === slot.id);
-  if (!slotData) return;
+  if (!slotData) {
+    console.log(`      renderImageSlot: no slotData for slot ${slot.id}`);
+    return;
+  }
 
   const image = imageMap.get(slotData.image_id);
-  if (!image) return;
+  if (!image) {
+    console.log(`      renderImageSlot: no image for image_id ${slotData.image_id}`);
+    return;
+  }
 
-  const { x, y, width, height } = position;
+  const { x, y, width, height, spanningHalf, fullSpreadWidth } = position;
+  console.log(`      renderImageSlot: ${image.filename} at (${x.toFixed(0)}, ${y.toFixed(0)}) ${width.toFixed(0)}x${height.toFixed(0)}${spanningHalf ? ` [spanning ${spanningHalf}]` : ''}`);
 
   // Get original image path
   const imagePath = path.join(uploadsDir, image.filename);
+  let actualPath = imagePath;
 
   if (!fs.existsSync(imagePath)) {
     // Try optimized WebP if original not found
     const basename = image.filename.replace(/\.[^.]+$/, '');
     const optimizedPath = path.join(uploadsDir, 'optimized', `${basename}.webp`);
     if (fs.existsSync(optimizedPath)) {
-      await renderImageFile(doc, optimizedPath, x, y, width, height);
+      console.log(`      Using optimized: ${optimizedPath}`);
+      actualPath = optimizedPath;
+    } else {
+      console.log(`      ERROR: Image not found: ${imagePath} nor ${optimizedPath}`);
+      return;
     }
-  } else {
-    await renderImageFile(doc, imagePath, x, y, width, height);
   }
+
+  await renderImageFile(doc, actualPath, x, y, width, height, spanningHalf, fullSpreadWidth);
 
   // Render annotation if present
   if (slotData.annotation) {
@@ -433,7 +489,9 @@ async function renderImageFile(
   x: number,
   y: number,
   width: number,
-  height: number
+  height: number,
+  spanningHalf?: 'left' | 'right',
+  fullSpreadWidth?: number
 ): Promise<void> {
   try {
     // Convert image to PNG buffer for PDFKit compatibility (especially for WebP)
@@ -446,34 +504,77 @@ async function renderImageFile(
     const imgWidth = metadata.width || 1;
     const imgHeight = metadata.height || 1;
     const imgAspect = imgWidth / imgHeight;
-    const slotAspect = width / height;
 
-    let renderWidth = width;
-    let renderHeight = height;
-    let offsetX = 0;
-    let offsetY = 0;
+    let renderWidth: number;
+    let renderHeight: number;
+    let drawX: number;
+    let drawY: number;
 
-    // Cover mode: fill slot while maintaining aspect ratio
-    if (imgAspect > slotAspect) {
-      // Image is wider - fit height, crop width
-      renderHeight = height;
-      renderWidth = height * imgAspect;
-      offsetX = (width - renderWidth) / 2;
+    if (spanningHalf && fullSpreadWidth) {
+      // Spanning image: scale to cover the FULL spread, then show only one half
+      const spreadAspect = fullSpreadWidth / height;
+
+      // Cover mode for the full spread
+      if (imgAspect > spreadAspect) {
+        // Image is wider - fit height, crop width
+        renderHeight = height;
+        renderWidth = height * imgAspect;
+      } else {
+        // Image is taller - fit width, crop height
+        renderWidth = fullSpreadWidth;
+        renderHeight = fullSpreadWidth / imgAspect;
+      }
+
+      // Center the image on the spread
+      const spreadCenterX = fullSpreadWidth / 2;
+      const spreadCenterY = height / 2;
+      const imgCenterX = renderWidth / 2;
+      const imgCenterY = renderHeight / 2;
+
+      // Position relative to spread origin (0, 0)
+      const imgSpreadX = spreadCenterX - imgCenterX;
+      const imgSpreadY = spreadCenterY - imgCenterY;
+
+      // For left half: visible area is x=0 to x=spreadWidth/2
+      // For right half: visible area is x=spreadWidth/2 to x=spreadWidth
+      // We clip to the visible area and adjust image position
+      if (spanningHalf === 'left') {
+        // Clip to left page area, image drawn at its spread position
+        drawX = x + imgSpreadX;
+        drawY = y + imgSpreadY;
+      } else {
+        // Right half: shift everything left by half the spread width
+        const halfSpread = fullSpreadWidth / 2;
+        drawX = x + imgSpreadX - halfSpread;
+        drawY = y + imgSpreadY;
+      }
     } else {
-      // Image is taller - fit width, crop height
-      renderWidth = width;
-      renderHeight = width / imgAspect;
-      offsetY = (height - renderHeight) / 2;
+      // Non-spanning: standard cover mode for the slot
+      const slotAspect = width / height;
+
+      if (imgAspect > slotAspect) {
+        // Image is wider - fit height, crop width
+        renderHeight = height;
+        renderWidth = height * imgAspect;
+      } else {
+        // Image is taller - fit width, crop height
+        renderWidth = width;
+        renderHeight = width / imgAspect;
+      }
+
+      // Center in slot
+      drawX = x + (width - renderWidth) / 2;
+      drawY = y + (height - renderHeight) / 2;
     }
 
     // Save state for clipping
     doc.save();
 
-    // Create clipping rectangle
+    // Create clipping rectangle (visible area on this page)
     doc.rect(x, y, width, height).clip();
 
-    // Draw image centered in slot
-    doc.image(imageBuffer, x + offsetX, y + offsetY, {
+    // Draw image
+    doc.image(imageBuffer, drawX, drawY, {
       width: renderWidth,
       height: renderHeight,
     });
