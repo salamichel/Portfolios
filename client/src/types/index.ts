@@ -27,6 +27,7 @@ export interface Image {
   mime_type: string;
   created_at: string;
   updated_at: string;
+  people?: ImagePerson[]; // Detected people (loaded when needed)
 }
 
 export interface PaginatedImages {

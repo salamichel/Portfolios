@@ -593,6 +593,28 @@ export function ImageGallery({ themeId, themes, searchQuery, onImageUpdate }: Im
                 </div>
               )}
 
+              {/* People badges - always visible */}
+              {image.people && image.people.length > 0 && (
+                <div className="absolute bottom-0 left-0 right-0 p-1.5 bg-gradient-to-t from-black/80 via-black/60 to-transparent pointer-events-none">
+                  <div className="flex flex-wrap gap-1">
+                    {image.people.slice(0, 3).map((person) => (
+                      <span
+                        key={person.id}
+                        className="px-1.5 py-0.5 bg-purple-600/90 text-white text-xs rounded-full font-medium"
+                        title={`${person.member?.name || 'Inconnu'} (${Math.round((person.confidence || 0) * 100)}%)`}
+                      >
+                        {person.member?.name || '?'}
+                      </span>
+                    ))}
+                    {image.people.length > 3 && (
+                      <span className="px-1.5 py-0.5 bg-purple-600/90 text-white text-xs rounded-full font-medium">
+                        +{image.people.length - 3}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* Title on hover */}
               <div className="absolute bottom-0 left-0 right-0 p-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
                 <p className="text-sm font-medium truncate">{image.title || image.original_name}</p>

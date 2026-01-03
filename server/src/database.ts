@@ -647,7 +647,17 @@ export const imageDb = {
 
     console.log(`[imageDb.getAll] Found ${images.length} images (total: ${total.count})`);
 
-    return { images, total: total.count };
+    // Enrich images with detected people
+    const enrichedImages = images.map(img => {
+      const people = imagePeopleDb.getByImageId(img.id);
+      const enrichedPeople = people.map(p => {
+        const member = p.family_member_id ? familyMemberDb.getById(p.family_member_id) : null;
+        return { ...p, member };
+      });
+      return { ...img, people: enrichedPeople };
+    });
+
+    return { images: enrichedImages, total: total.count };
   },
 
   getById(id: string): Image | undefined {
