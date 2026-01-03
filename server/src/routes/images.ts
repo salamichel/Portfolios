@@ -58,6 +58,8 @@ const upload = multer({
 router.get('/', (req, res) => {
   try {
     const { theme_id, limit, offset, search, tag, mood, person } = req.query;
+    console.log(`[GET /images] Filters - theme:${theme_id}, search:"${search}", tag:"${tag}", mood:"${mood}", person:"${person}"`);
+
     const result = imageDb.getAll({
       theme_id: theme_id as string,
       limit: limit ? parseInt(limit as string) : 50,
@@ -67,8 +69,11 @@ router.get('/', (req, res) => {
       mood: mood as string,
       person: person as string
     });
+
+    console.log(`[GET /images] Returned ${result.images.length} images (total: ${result.total})`);
     res.json(result);
   } catch (error) {
+    console.error('[GET /images] Error:', error);
     res.status(500).json({ error: 'Failed to fetch images' });
   }
 });

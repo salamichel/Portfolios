@@ -594,11 +594,14 @@ export const imageDb = {
     let whereClause = '1=1';
     const params: any[] = [];
 
+    console.log(`[imageDb.getAll] Options:`, JSON.stringify(options));
+
     // If filtering by person, join with image_people table
     if (options.person) {
       fromClause = 'images INNER JOIN image_people ON images.id = image_people.image_id';
       whereClause += ' AND image_people.family_member_id = ?';
       params.push(options.person);
+      console.log(`[imageDb.getAll] Filtering by person: ${options.person}`);
     }
 
     if (options.theme_id) {
@@ -622,17 +625,21 @@ export const imageDb = {
       params.push(options.mood);
     }
 
-    const total = db.prepare(`SELECT COUNT(DISTINCT images.id) as count FROM ${fromClause} WHERE ${whereClause}`).get(...params) as { count: number };
+    const countQuery = `SELECT COUNT(DISTINCT images.id) as count FROM ${fromClause} WHERE ${whereClause}`;
+    console.log(`[imageDb.getAll] Count SQL: ${countQuery}`);
+    console.log(`[imageDb.getAll] Params:`, params);
+
+    const total = db.prepare(countQuery).get(...params) as { count: number };
 
     const limit = options.limit || 50;
     const offset = options.offset || 0;
 
-    const images = db.prepare(`
-      SELECT DISTINCT images.* FROM ${fromClause}
-      WHERE ${whereClause}
-      ORDER BY images.created_at DESC
-      LIMIT ? OFFSET ?
-    `).all(...params, limit, offset) as Image[];
+    const selectQuery = `SELECT DISTINCT images.* FROM ${fromClause} WHERE ${whereClause} ORDER BY images.created_at DESC LIMIT ? OFFSET ?`;
+    console.log(`[imageDb.getAll] Select SQL: ${selectQuery}`);
+
+    const images = db.prepare(selectQuery).all(...params, limit, offset) as Image[];
+
+    console.log(`[imageDb.getAll] Found ${images.length} images (total: ${total.count})`);
 
     return { images, total: total.count };
   },
