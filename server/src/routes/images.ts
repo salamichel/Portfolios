@@ -58,17 +58,27 @@ const upload = multer({
 router.get('/', (req, res) => {
   try {
     const { theme_id, limit, offset, search, tag, mood, person } = req.query;
-    console.log(`[GET /images] Filters - theme:${theme_id}, search:"${search}", tag:"${tag}", mood:"${mood}", person:"${person}"`);
+    console.log(`[GET /images] Raw query params - theme:${theme_id}, search:"${search}", tag:"${tag}", mood:"${mood}", person:"${person}"`);
 
-    const result = imageDb.getAll({
-      theme_id: theme_id as string,
+    // Filter out "undefined" strings (React sends these when state is undefined)
+    const cleanString = (val: any): string | undefined => {
+      if (!val || val === 'undefined' || val === 'null') return undefined;
+      return val as string;
+    };
+
+    const options = {
+      theme_id: cleanString(theme_id),
       limit: limit ? parseInt(limit as string) : 50,
       offset: offset ? parseInt(offset as string) : 0,
-      search: search as string,
-      tag: tag as string,
-      mood: mood as string,
-      person: person as string
-    });
+      search: cleanString(search),
+      tag: cleanString(tag),
+      mood: cleanString(mood),
+      person: cleanString(person)
+    };
+
+    console.log(`[GET /images] Cleaned filters -`, JSON.stringify(options));
+
+    const result = imageDb.getAll(options);
 
     console.log(`[GET /images] Returned ${result.images.length} images (total: ${result.total})`);
     res.json(result);
