@@ -236,8 +236,9 @@ function sideHasContent(
   pageData: BookPage['page_data'],
   imageMap: Map<string, Image>
 ): boolean {
+  // Include spanning slots for BOTH sides (they render on both pages)
   const sideSlots = slots.filter(s => {
-    if (s.width > 100) return side === 'left'; // Spanning slots counted as left
+    if (s.width > 100) return true; // Spanning slots have content on both sides
     return s.page === side;
   });
 
@@ -299,9 +300,10 @@ async function renderSinglePages(
   const imageMap = new Map<string, Image>();
   images.forEach(img => imageMap.set(img.id, img));
 
-  // Separate slots by page
+  // Separate slots by page (spanning slots included in BOTH for split rendering)
+  const spanningSlots = slots.filter(s => s.width > 100);
   const leftSlots = slots.filter(s => s.page === 'left' || s.width > 100);
-  const rightSlots = slots.filter(s => s.page === 'right');
+  const rightSlots = [...slots.filter(s => s.page === 'right'), ...spanningSlots];
 
   const pageWidth = formatConfig.singleWidth;
   const pageHeight = formatConfig.singleHeight;
