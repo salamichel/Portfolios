@@ -159,8 +159,8 @@ export const booksApi = {
   getPdfFormats: () =>
     api.get<PdfFormatInfo[]>('/books/pdf-formats').then(res => res.data),
 
-  exportPdf: (bookId: string, format: 'landscape' | 'portrait') =>
-    api.post<PdfExportResult>(`/books/${bookId}/export-pdf`, { format }).then(res => res.data),
+  exportPdf: (bookId: string, format: 'landscape' | 'portrait', pageMode: 'spread' | 'single' = 'spread') =>
+    api.post<PdfExportResult>(`/books/${bookId}/export-pdf`, { format, pageMode }).then(res => res.data),
 
   listPdfs: (bookId: string) =>
     api.get<string[]>(`/books/${bookId}/pdfs`).then(res => res.data),

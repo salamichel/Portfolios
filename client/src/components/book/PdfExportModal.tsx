@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { X, FileDown, Loader2, Check } from 'lucide-react';
+import { X, FileDown, Loader2, Check, BookOpen, File } from 'lucide-react';
 import { booksApi, type PdfExportResult } from '../../api/client';
 
 interface PdfExportModalProps {
@@ -12,6 +12,7 @@ type ExportStatus = 'idle' | 'generating' | 'success' | 'error';
 
 export function PdfExportModal({ bookId, bookName, onClose }: PdfExportModalProps) {
   const [selectedFormat, setSelectedFormat] = useState<'landscape' | 'portrait'>('landscape');
+  const [selectedPageMode, setSelectedPageMode] = useState<'spread' | 'single'>('spread');
   const [status, setStatus] = useState<ExportStatus>('idle');
   const [result, setResult] = useState<PdfExportResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -31,12 +32,27 @@ export function PdfExportModal({ bookId, bookName, onClose }: PdfExportModalProp
     },
   ];
 
+  const pageModes = [
+    {
+      id: 'spread' as const,
+      name: 'Pages doubles',
+      description: 'Chaque spread sur une page large (idéal pour écran)',
+      icon: BookOpen,
+    },
+    {
+      id: 'single' as const,
+      name: 'Pages simples',
+      description: 'Pages gauche et droite séparées (idéal pour impression)',
+      icon: File,
+    },
+  ];
+
   const handleExport = async () => {
     setStatus('generating');
     setError(null);
 
     try {
-      const exportResult = await booksApi.exportPdf(bookId, selectedFormat);
+      const exportResult = await booksApi.exportPdf(bookId, selectedFormat, selectedPageMode);
       setResult(exportResult);
       setStatus('success');
     } catch (err) {
@@ -59,9 +75,9 @@ export function PdfExportModal({ bookId, bookName, onClose }: PdfExportModalProp
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full mx-4 overflow-hidden">
+      <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full mx-4 overflow-hidden max-h-[90vh] overflow-y-auto">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b">
+        <div className="flex items-center justify-between p-4 border-b sticky top-0 bg-white">
           <h2 className="text-lg font-semibold text-gray-900">
             Exporter en PDF
           </h2>
@@ -78,38 +94,82 @@ export function PdfExportModal({ bookId, bookName, onClose }: PdfExportModalProp
           {status === 'idle' && (
             <>
               <p className="text-sm text-gray-600 mb-4">
-                Choisissez le format pour exporter <strong>{bookName}</strong> en PDF haute qualité (300 DPI).
+                Choisissez les options pour exporter <strong>{bookName}</strong> en PDF haute qualité (300 DPI).
               </p>
 
-              <div className="space-y-3">
-                {formats.map((format) => (
-                  <label
-                    key={format.id}
-                    className={`block p-4 border-2 rounded-lg cursor-pointer transition-all ${
-                      selectedFormat === format.id
-                        ? 'border-rose-500 bg-rose-50'
-                        : 'border-gray-200 hover:border-gray-300'
-                    }`}
-                  >
-                    <div className="flex items-start gap-3">
-                      <input
-                        type="radio"
-                        name="format"
-                        value={format.id}
-                        checked={selectedFormat === format.id}
-                        onChange={() => setSelectedFormat(format.id)}
-                        className="mt-1 text-rose-500 focus:ring-rose-500"
-                      />
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium text-gray-900">{format.name}</span>
-                          <span className="text-sm text-gray-500">({format.dimensions})</span>
+              {/* Format selection */}
+              <div className="mb-6">
+                <h3 className="text-sm font-medium text-gray-700 mb-3">Format</h3>
+                <div className="space-y-2">
+                  {formats.map((format) => (
+                    <label
+                      key={format.id}
+                      className={`block p-3 border-2 rounded-lg cursor-pointer transition-all ${
+                        selectedFormat === format.id
+                          ? 'border-rose-500 bg-rose-50'
+                          : 'border-gray-200 hover:border-gray-300'
+                      }`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <input
+                          type="radio"
+                          name="format"
+                          value={format.id}
+                          checked={selectedFormat === format.id}
+                          onChange={() => setSelectedFormat(format.id)}
+                          className="mt-1 text-rose-500 focus:ring-rose-500"
+                        />
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium text-gray-900">{format.name}</span>
+                            <span className="text-sm text-gray-500">({format.dimensions})</span>
+                          </div>
+                          <p className="text-xs text-gray-500 mt-0.5">{format.description}</p>
                         </div>
-                        <p className="text-sm text-gray-500 mt-1">{format.description}</p>
                       </div>
-                    </div>
-                  </label>
-                ))}
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Page mode selection */}
+              <div>
+                <h3 className="text-sm font-medium text-gray-700 mb-3">Mode de page</h3>
+                <div className="grid grid-cols-2 gap-3">
+                  {pageModes.map((mode) => {
+                    const Icon = mode.icon;
+                    return (
+                      <label
+                        key={mode.id}
+                        className={`block p-3 border-2 rounded-lg cursor-pointer transition-all text-center ${
+                          selectedPageMode === mode.id
+                            ? 'border-rose-500 bg-rose-50'
+                            : 'border-gray-200 hover:border-gray-300'
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="pageMode"
+                          value={mode.id}
+                          checked={selectedPageMode === mode.id}
+                          onChange={() => setSelectedPageMode(mode.id)}
+                          className="sr-only"
+                        />
+                        <Icon className={`w-6 h-6 mx-auto mb-2 ${
+                          selectedPageMode === mode.id ? 'text-rose-500' : 'text-gray-400'
+                        }`} />
+                        <span className={`block font-medium text-sm ${
+                          selectedPageMode === mode.id ? 'text-rose-700' : 'text-gray-700'
+                        }`}>
+                          {mode.name}
+                        </span>
+                        <span className="block text-xs text-gray-500 mt-1">
+                          {mode.description}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
               </div>
             </>
           )}

@@ -2,18 +2,20 @@ import PDFDocument from 'pdfkit';
 import fs from 'fs';
 import path from 'path';
 import sharp from 'sharp';
-import { v4 as uuidv4 } from 'uuid';
 import type { Book, BookPage, Image, LayoutSlot, PageSlotData, TextSlotData, TextStyle, SlotAnnotation } from '../database.js';
 
 // PDF format configurations (in points, 1 point = 1/72 inch)
-// For 300 DPI output, these are the spread (double-page) dimensions
 export type PdfFormat = 'landscape' | 'portrait';
+export type PageMode = 'spread' | 'single';
 
 interface FormatConfig {
   name: string;
   // Single page dimensions in cm
   pageWidthCm: number;
   pageHeightCm: number;
+  // Single page dimensions in points
+  singleWidth: number;
+  singleHeight: number;
   // Spread (double page) dimensions in points
   spreadWidth: number;
   spreadHeight: number;
@@ -27,13 +29,17 @@ export const PDF_FORMATS: Record<PdfFormat, FormatConfig> = {
     name: 'Grand paysage - 29.7x21cm',
     pageWidthCm: 29.7,
     pageHeightCm: 21,
-    spreadWidth: 29.7 * 2 * CM_TO_POINTS, // 59.4cm = 1683.78 points
+    singleWidth: 29.7 * CM_TO_POINTS,     // 29.7cm = 841.89 points
+    singleHeight: 21 * CM_TO_POINTS,       // 21cm = 595.28 points
+    spreadWidth: 29.7 * 2 * CM_TO_POINTS,  // 59.4cm = 1683.78 points
     spreadHeight: 21 * CM_TO_POINTS,       // 21cm = 595.28 points
   },
   portrait: {
     name: 'Grand portrait - 21x29.7cm',
     pageWidthCm: 21,
     pageHeightCm: 29.7,
+    singleWidth: 21 * CM_TO_POINTS,        // 21cm = 595.28 points
+    singleHeight: 29.7 * CM_TO_POINTS,     // 29.7cm = 841.89 points
     spreadWidth: 21 * 2 * CM_TO_POINTS,    // 42cm = 1190.55 points
     spreadHeight: 29.7 * CM_TO_POINTS,     // 29.7cm = 841.89 points
   },
@@ -123,6 +129,7 @@ interface GeneratePdfOptions {
   book: Book;
   pages: BookPage[];
   format: PdfFormat;
+  pageMode: PageMode;
 }
 
 interface PdfResult {
@@ -132,17 +139,21 @@ interface PdfResult {
 }
 
 export async function generateBookPdf(options: GeneratePdfOptions): Promise<PdfResult> {
-  const { book, pages, format } = options;
+  const { book, pages, format, pageMode } = options;
   const formatConfig = PDF_FORMATS[format];
 
-  const filename = `${book.name.replace(/[^a-zA-Z0-9-_]/g, '_')}_${format}_${Date.now()}.pdf`;
+  const modeLabel = pageMode === 'spread' ? 'spread' : 'single';
+  const filename = `${book.name.replace(/[^a-zA-Z0-9-_]/g, '_')}_${format}_${modeLabel}_${Date.now()}.pdf`;
   const filepath = path.join(pdfsDir, filename);
+
+  // Determine page size based on mode
+  const pageWidth = pageMode === 'spread' ? formatConfig.spreadWidth : formatConfig.singleWidth;
+  const pageHeight = pageMode === 'spread' ? formatConfig.spreadHeight : formatConfig.singleHeight;
 
   return new Promise(async (resolve, reject) => {
     try {
-      // Create PDF document with spread dimensions
       const doc = new PDFDocument({
-        size: [formatConfig.spreadWidth, formatConfig.spreadHeight],
+        size: [pageWidth, pageHeight],
         margin: 0,
         autoFirstPage: false,
       });
@@ -153,9 +164,15 @@ export async function generateBookPdf(options: GeneratePdfOptions): Promise<PdfR
       // Process each page
       for (let i = 0; i < pages.length; i++) {
         const page = pages[i];
-        doc.addPage();
 
-        await renderSpread(doc, page, formatConfig);
+        if (pageMode === 'spread') {
+          // One PDF page per spread (double page)
+          doc.addPage();
+          await renderSpread(doc, page, formatConfig, pageWidth, pageHeight);
+        } else {
+          // Two PDF pages per spread (left then right)
+          await renderSinglePages(doc, page, formatConfig);
+        }
       }
 
       doc.end();
@@ -179,7 +196,9 @@ export async function generateBookPdf(options: GeneratePdfOptions): Promise<PdfR
 async function renderSpread(
   doc: PDFKit.PDFDocument,
   page: BookPage,
-  formatConfig: FormatConfig
+  formatConfig: FormatConfig,
+  pageWidth: number,
+  pageHeight: number
 ): Promise<void> {
   const template = page.template;
   const slots = template?.layout?.slots || [];
@@ -192,24 +211,80 @@ async function renderSpread(
 
   // Render each slot
   for (const slot of slots) {
+    const position = getSlotPositionSpread(slot, pageWidth, pageHeight);
     if (slot.type === 'text') {
-      await renderTextSlot(doc, slot, pageData, formatConfig);
+      await renderTextSlot(doc, slot, pageData, position);
     } else {
-      await renderImageSlot(doc, slot, pageData, imageMap, formatConfig);
+      await renderImageSlot(doc, slot, pageData, imageMap, position);
     }
   }
 }
 
-function getSlotPosition(slot: LayoutSlot, formatConfig: FormatConfig): { x: number; y: number; width: number; height: number } {
+async function renderSinglePages(
+  doc: PDFKit.PDFDocument,
+  page: BookPage,
+  formatConfig: FormatConfig
+): Promise<void> {
+  const template = page.template;
+  const slots = template?.layout?.slots || [];
+  const pageData = page.page_data;
+  const images = page.images || [];
+
+  // Create image map
+  const imageMap = new Map<string, Image>();
+  images.forEach(img => imageMap.set(img.id, img));
+
+  // Separate slots by page
+  const leftSlots = slots.filter(s => s.page === 'left' || s.width > 100);
+  const rightSlots = slots.filter(s => s.page === 'right');
+
+  const pageWidth = formatConfig.singleWidth;
+  const pageHeight = formatConfig.singleHeight;
+
+  // Render left page
+  if (leftSlots.length > 0) {
+    doc.addPage({ size: [pageWidth, pageHeight] });
+    for (const slot of leftSlots) {
+      const position = getSlotPositionSingle(slot, 'left', pageWidth, pageHeight);
+      if (slot.type === 'text') {
+        await renderTextSlot(doc, slot, pageData, position);
+      } else {
+        await renderImageSlot(doc, slot, pageData, imageMap, position);
+      }
+    }
+  }
+
+  // Render right page
+  if (rightSlots.length > 0) {
+    doc.addPage({ size: [pageWidth, pageHeight] });
+    for (const slot of rightSlots) {
+      const position = getSlotPositionSingle(slot, 'right', pageWidth, pageHeight);
+      if (slot.type === 'text') {
+        await renderTextSlot(doc, slot, pageData, position);
+      } else {
+        await renderImageSlot(doc, slot, pageData, imageMap, position);
+      }
+    }
+  }
+}
+
+interface SlotPosition {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+function getSlotPositionSpread(slot: LayoutSlot, pageWidth: number, pageHeight: number): SlotPosition {
   const isSpanning = slot.width > 100;
-  const singlePageWidth = formatConfig.spreadWidth / 2;
+  const singlePageWidth = pageWidth / 2;
 
   let x: number, width: number;
 
   if (isSpanning) {
     // Slot spans both pages
-    x = (slot.x / 200) * formatConfig.spreadWidth;
-    width = (slot.width / 200) * formatConfig.spreadWidth;
+    x = (slot.x / 200) * pageWidth;
+    width = (slot.width / 200) * pageWidth;
   } else if (slot.page === 'left') {
     x = (slot.x / 100) * singlePageWidth;
     width = (slot.width / 100) * singlePageWidth;
@@ -219,8 +294,33 @@ function getSlotPosition(slot: LayoutSlot, formatConfig: FormatConfig): { x: num
     width = (slot.width / 100) * singlePageWidth;
   }
 
-  const y = (slot.y / 100) * formatConfig.spreadHeight;
-  const height = (slot.height / 100) * formatConfig.spreadHeight;
+  const y = (slot.y / 100) * pageHeight;
+  const height = (slot.height / 100) * pageHeight;
+
+  return { x, y, width, height };
+}
+
+function getSlotPositionSingle(slot: LayoutSlot, targetPage: 'left' | 'right', pageWidth: number, pageHeight: number): SlotPosition {
+  const isSpanning = slot.width > 100;
+
+  let x: number, width: number;
+
+  if (isSpanning) {
+    // Spanning slot: on left page, show left half; on right page, show right half
+    if (targetPage === 'left') {
+      x = (slot.x / 100) * pageWidth;
+      width = Math.min(100, slot.width) / 100 * pageWidth;
+    } else {
+      x = 0;
+      width = ((slot.width - 100) / 100) * pageWidth;
+    }
+  } else {
+    x = (slot.x / 100) * pageWidth;
+    width = (slot.width / 100) * pageWidth;
+  }
+
+  const y = (slot.y / 100) * pageHeight;
+  const height = (slot.height / 100) * pageHeight;
 
   return { x, y, width, height };
 }
@@ -230,7 +330,7 @@ async function renderImageSlot(
   slot: LayoutSlot,
   pageData: BookPage['page_data'],
   imageMap: Map<string, Image>,
-  formatConfig: FormatConfig
+  position: SlotPosition
 ): Promise<void> {
   const slotData = pageData?.slots?.find(s => s.slot_id === slot.id);
   if (!slotData) return;
@@ -238,7 +338,7 @@ async function renderImageSlot(
   const image = imageMap.get(slotData.image_id);
   if (!image) return;
 
-  const { x, y, width, height } = getSlotPosition(slot, formatConfig);
+  const { x, y, width, height } = position;
 
   // Get original image path
   const imagePath = path.join(uploadsDir, image.filename);
@@ -335,32 +435,55 @@ function renderAnnotation(
   const paragraph = annotation.paragraph;
 
   const position = annotation.position || 'bottom';
+  const padding = 8;
+
+  // Calculate text width for height calculation
+  let baseAnnotWidth = slotWidth;
+  if (position === 'overlay') {
+    baseAnnotWidth = slotWidth * 0.8;
+  } else if (position === 'side') {
+    baseAnnotWidth = slotWidth * 0.33;
+  }
+  const textWidth = baseAnnotWidth - padding * 2;
+
+  // Calculate required height based on content
+  let requiredHeight = padding * 2;
+
+  if (annotation.show_title && title) {
+    doc.font('Helvetica-Bold').fontSize(10);
+    requiredHeight += doc.heightOfString(title, { width: textWidth }) + 4;
+  }
+
+  if (annotation.show_description && description) {
+    doc.font('Helvetica').fontSize(8);
+    requiredHeight += doc.heightOfString(description, { width: textWidth }) + 4;
+  }
+
+  if (annotation.show_paragraph && paragraph) {
+    doc.font('Helvetica-Oblique').fontSize(8);
+    requiredHeight += doc.heightOfString(paragraph, { width: textWidth }) + 2;
+  }
 
   // Calculate annotation area
   let annotX = slotX;
   let annotY = slotY;
-  let annotWidth = slotWidth;
-  let annotHeight = slotHeight;
-  const padding = 10;
+  let annotWidth = baseAnnotWidth;
+  let annotHeight = Math.min(requiredHeight, slotHeight * 0.4);
 
   switch (position) {
     case 'bottom':
-      annotHeight = Math.min(slotHeight * 0.3, 80);
       annotY = slotY + slotHeight - annotHeight;
       break;
     case 'top':
-      annotHeight = Math.min(slotHeight * 0.3, 80);
+      // annotY already at slotY
       break;
     case 'overlay':
-      // Center overlay
-      annotWidth = slotWidth * 0.8;
-      annotHeight = Math.min(slotHeight * 0.4, 100);
       annotX = slotX + (slotWidth - annotWidth) / 2;
       annotY = slotY + (slotHeight - annotHeight) / 2;
       break;
     case 'side':
-      annotWidth = slotWidth * 0.33;
       annotX = slotX + slotWidth - annotWidth;
+      annotHeight = slotHeight;
       break;
   }
 
@@ -374,23 +497,23 @@ function renderAnnotation(
   doc.fillColor('white');
   let textY = annotY + padding;
   const textX = annotX + padding;
-  const textWidth = annotWidth - padding * 2;
+  const maxTextY = annotY + annotHeight - padding;
 
-  if (annotation.show_title && title) {
-    doc.font('Helvetica-Bold').fontSize(11);
-    doc.text(title, textX, textY, { width: textWidth, lineGap: 2 });
-    textY = doc.y + 4;
+  if (annotation.show_title && title && textY < maxTextY) {
+    doc.font('Helvetica-Bold').fontSize(10);
+    doc.text(title, textX, textY, { width: textWidth, lineGap: 1 });
+    textY = doc.y + 3;
   }
 
-  if (annotation.show_description && description) {
-    doc.font('Helvetica').fontSize(9);
-    doc.text(description, textX, textY, { width: textWidth, lineGap: 2 });
-    textY = doc.y + 4;
+  if (annotation.show_description && description && textY < maxTextY) {
+    doc.font('Helvetica').fontSize(8);
+    doc.text(description, textX, textY, { width: textWidth, lineGap: 1 });
+    textY = doc.y + 3;
   }
 
-  if (annotation.show_paragraph && paragraph) {
-    doc.font('Helvetica-Oblique').fontSize(9);
-    doc.text(paragraph, textX, textY, { width: textWidth, lineGap: 2 });
+  if (annotation.show_paragraph && paragraph && textY < maxTextY) {
+    doc.font('Helvetica-Oblique').fontSize(8);
+    doc.text(paragraph, textX, textY, { width: textWidth, lineGap: 1 });
   }
 
   doc.restore();
@@ -400,12 +523,12 @@ async function renderTextSlot(
   doc: PDFKit.PDFDocument,
   slot: LayoutSlot,
   pageData: BookPage['page_data'],
-  formatConfig: FormatConfig
+  position: SlotPosition
 ): Promise<void> {
   const textData = pageData?.textSlots?.find(s => s.slot_id === slot.id);
   if (!textData || !textData.content?.trim()) return;
 
-  const { x, y, width, height } = getSlotPosition(slot, formatConfig);
+  const { x, y, width, height } = position;
   const style = textData.style;
   const padding = 10;
 
@@ -435,13 +558,17 @@ async function renderTextSlot(
   let textY = y + padding;
   const textX = x + padding;
   const textWidth = width - padding * 2;
+  const maxY = y + height - padding;
 
   // Parse and render each line
   const lines = textData.content.split('\n');
 
   for (const line of lines) {
+    // Stop if we've exceeded the slot height
+    if (textY >= maxY) break;
+
     if (line.trim() === '') {
-      textY += baseFontSize * 1.5;
+      textY += baseFontSize * 1.2;
       continue;
     }
 
@@ -451,50 +578,41 @@ async function renderTextSlot(
     let fontSize = baseFontSize;
     let isHeading = false;
     if (heading === 'h1') {
-      fontSize = 20;
+      fontSize = 18;
       isHeading = true;
     } else if (heading === 'h2') {
-      fontSize = 16;
+      fontSize = 14;
       isHeading = true;
     }
+
+    // Calculate line height
+    const lineHeight = fontSize * 1.3;
 
     // For simple lines without formatting, render directly
     if (fragments.length === 1 && !fragments[0].bold && !fragments[0].italic) {
       const fontName = getFontName(fontBase, isHeading || style?.fontWeight === 'bold', style?.fontStyle === 'italic');
       doc.font(fontName).fontSize(fontSize).fillColor(textColor);
-      doc.text(fragments[0].content, textX, textY, { width: textWidth, align: align as 'left' | 'center' | 'right' });
-      textY = doc.y + 4;
+      doc.text(fragments[0].content, textX, textY, {
+        width: textWidth,
+        align: align as 'left' | 'center' | 'right',
+        lineGap: 2
+      });
+      textY = doc.y + (isHeading ? 6 : 3);
     } else {
-      // Complex line with multiple fragments - render fragment by fragment
-      let currentX = textX;
+      // Complex line with multiple fragments - render as a single line with mixed formatting
+      // Use a simpler approach: concatenate and render with primary style
+      const fullText = fragments.map(f => f.content).join('');
+      const hasBold = fragments.some(f => f.bold) || isHeading || style?.fontWeight === 'bold';
+      const hasItalic = fragments.some(f => f.italic) || style?.fontStyle === 'italic';
 
-      // For centered/right alignment, we need to calculate total width first
-      if (align !== 'left') {
-        const totalWidth = fragments.reduce((sum, frag) => {
-          const fontName = getFontName(fontBase, frag.bold || isHeading || style?.fontWeight === 'bold', frag.italic || style?.fontStyle === 'italic');
-          doc.font(fontName).fontSize(fontSize);
-          return sum + doc.widthOfString(frag.content);
-        }, 0);
-
-        if (align === 'center') {
-          currentX = textX + (textWidth - totalWidth) / 2;
-        } else if (align === 'right') {
-          currentX = textX + textWidth - totalWidth;
-        }
-      }
-
-      for (const fragment of fragments) {
-        const fontName = getFontName(
-          fontBase,
-          fragment.bold || isHeading || style?.fontWeight === 'bold',
-          fragment.italic || style?.fontStyle === 'italic'
-        );
-        doc.font(fontName).fontSize(fontSize).fillColor(textColor);
-        doc.text(fragment.content, currentX, textY, { continued: true, lineBreak: false });
-        currentX += doc.widthOfString(fragment.content);
-      }
-      doc.text(''); // End the continued text
-      textY = doc.y + 4;
+      const fontName = getFontName(fontBase, hasBold, hasItalic);
+      doc.font(fontName).fontSize(fontSize).fillColor(textColor);
+      doc.text(fullText, textX, textY, {
+        width: textWidth,
+        align: align as 'left' | 'center' | 'right',
+        lineGap: 2
+      });
+      textY = doc.y + (isHeading ? 6 : 3);
     }
   }
 

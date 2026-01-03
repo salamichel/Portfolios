@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { bookDb, bookPageDb, imageDb, templateDb, processingReportDb } from '../database.js';
 import { suggestBookLayout } from '../services/bookLayoutAI.js';
-import { generateBookPdf, getPdfPath, pdfExists, listBookPdfs, deletePdf, PDF_FORMATS, type PdfFormat } from '../services/pdfGenerator.js';
+import { generateBookPdf, getPdfPath, pdfExists, listBookPdfs, deletePdf, PDF_FORMATS, type PdfFormat, type PageMode } from '../services/pdfGenerator.js';
 
 const router = Router();
 
@@ -328,10 +328,14 @@ router.get('/pdf-formats', (req, res) => {
 // Generate PDF for a book
 router.post('/:id/export-pdf', async (req, res) => {
   try {
-    const { format } = req.body;
+    const { format, pageMode = 'spread' } = req.body;
 
     if (!format || !['landscape', 'portrait'].includes(format)) {
       return res.status(400).json({ error: 'Invalid format. Must be "landscape" or "portrait"' });
+    }
+
+    if (!['spread', 'single'].includes(pageMode)) {
+      return res.status(400).json({ error: 'Invalid pageMode. Must be "spread" or "single"' });
     }
 
     const book = bookDb.getById(req.params.id);
@@ -348,6 +352,7 @@ router.post('/:id/export-pdf', async (req, res) => {
       book,
       pages,
       format: format as PdfFormat,
+      pageMode: pageMode as PageMode,
     });
 
     res.json({
