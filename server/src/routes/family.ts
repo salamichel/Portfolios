@@ -456,7 +456,7 @@ router.post('/images/:imageId/recognize', async (req, res) => {
 // Batch recognize people in multiple images (OPTIMIZED: 1 API call for all images)
 router.post('/batch-recognize', async (req, res) => {
   try {
-    const { image_ids, save = true, batch_size = 10 } = req.body;
+    const { image_ids, save = true, batch_size = 10, mode = 'all' } = req.body;
 
     if (!Array.isArray(image_ids) || image_ids.length === 0) {
       return res.status(400).json({ error: 'image_ids array is required' });
@@ -468,6 +468,7 @@ router.post('/batch-recognize', async (req, res) => {
     // Prepare image paths
     const imagePaths: Array<{ id: string; path: string }> = [];
     const notFound: string[] = [];
+    const skipped: string[] = [];
 
     for (const imageId of image_ids) {
       const image = imageDb.getById(imageId);
@@ -475,6 +476,16 @@ router.post('/batch-recognize', async (req, res) => {
         notFound.push(imageId);
         continue;
       }
+
+      // Skip images already analyzed if mode is 'new_only'
+      if (mode === 'new_only') {
+        const existingPeople = imagePeopleDb.getByImageId(imageId);
+        if (existingPeople.length > 0) {
+          skipped.push(imageId);
+          continue;
+        }
+      }
+
       const imagePath = path.join(uploadsDir, 'optimized', `${path.parse(image.filename).name}.webp`);
       imagePaths.push({ id: imageId, path: imagePath });
     }
@@ -548,18 +559,23 @@ router.post('/batch-recognize', async (req, res) => {
     const totalBatches = Math.ceil(imagePaths.length / batch_size);
     const successfulBatches = totalBatches - failedBatches.length;
 
+    console.log(`[Batch Recognition] Résumé: ${allResults.length} analysées, ${skipped.length} ignorées (déjà analysées), ${notFound.length} non trouvées`);
+
     res.json({
       results: allResults,
       not_found: notFound,
+      skipped: skipped,
       failed_batches: failedBatches,
       summary: {
         total_images: image_ids.length,
         successful: allResults.length,
+        skipped: skipped.length,
         not_found: notFound.length,
         total_people_detected: totalPeople,
         api_calls_made: successfulBatches, // Only successful API calls
         failed_batches: failedBatches.length,
-        total_batches: totalBatches
+        total_batches: totalBatches,
+        mode: mode
       }
     });
   } catch (error) {

@@ -16,6 +16,7 @@ export default function FamilyAdmin() {
   // Batch recognition state
   const [isRecognizing, setIsRecognizing] = useState(false);
   const [batchSize, setBatchSize] = useState(5); // Réduit à 5 pour éviter les erreurs Gemini
+  const [recognitionMode, setRecognitionMode] = useState<'all' | 'new_only'>('new_only');
   const [recognitionProgress, setRecognitionProgress] = useState({ current: 0, total: 0 });
   const [recognitionLogs, setRecognitionLogs] = useState<string[]>([]);
   const [recognitionResults, setRecognitionResults] = useState<any>(null);
@@ -136,7 +137,8 @@ export default function FamilyAdmin() {
       return;
     }
 
-    if (!confirm(`Lancer la reconnaissance sur toutes les images ?\n\nConfiguration:\n- Taille des lots: ${batchSize} images\n- Cela peut prendre plusieurs minutes.`)) {
+    const modeLabel = recognitionMode === 'new_only' ? 'Nouvelles images uniquement' : 'Toutes les images (réanalyse complète)';
+    if (!confirm(`Lancer la reconnaissance ?\n\nConfiguration:\n- Mode: ${modeLabel}\n- Taille des lots: ${batchSize} images\n- Cela peut prendre plusieurs minutes.`)) {
       return;
     }
 
@@ -158,8 +160,9 @@ export default function FamilyAdmin() {
         return;
       }
 
-      addLog(`✅ ${imageIds.length} images à analyser`);
-      addLog(`⚙️ Configuration: ${batchSize} images par lot`);
+      addLog(`✅ ${imageIds.length} images trouvées`);
+      addLog(`⚙️ Mode: ${modeLabel}`);
+      addLog(`⚙️ Taille des lots: ${batchSize} images`);
       addLog(`🔄 Lancement de la reconnaissance...`);
 
       setRecognitionProgress({ current: 0, total: imageIds.length });
@@ -168,7 +171,8 @@ export default function FamilyAdmin() {
       const recognitionResponse = await api.post('/family/batch-recognize', {
         image_ids: imageIds,
         save: true,
-        batch_size: batchSize
+        batch_size: batchSize,
+        mode: recognitionMode
       });
 
       const summary = recognitionResponse.data.summary;
@@ -177,7 +181,12 @@ export default function FamilyAdmin() {
       setRecognitionProgress({ current: summary.successful, total: imageIds.length });
 
       addLog(`\n🎉 RECONNAISSANCE TERMINÉE !`);
-      addLog(`📸 Images traitées: ${summary.successful}/${summary.total_images}`);
+      addLog(`📸 Images analysées: ${summary.successful}/${summary.total_images}`);
+
+      if (summary.skipped > 0) {
+        addLog(`⏭️ Images ignorées (déjà analysées): ${summary.skipped}`);
+      }
+
       addLog(`👥 Personnes détectées: ${summary.total_people_detected}`);
       addLog(`📦 Lots réussis: ${summary.api_calls_made}/${summary.total_batches}`);
 
@@ -189,7 +198,7 @@ export default function FamilyAdmin() {
         addLog(`💡 Conseil: Réduisez la taille des lots pour éviter les erreurs`);
       }
 
-      if (summary.api_calls_made > 0) {
+      if (summary.api_calls_made > 0 && summary.total_images > 0) {
         addLog(`💰 Économie: ${Math.round((1 - summary.api_calls_made / summary.total_images) * 100)}% vs appels individuels`);
       }
 
@@ -254,6 +263,24 @@ export default function FamilyAdmin() {
               <h3 className="text-sm font-semibold text-slate-300 mb-3">Configuration</h3>
               <div className="space-y-3">
                 <div>
+                  <label className="block text-sm text-slate-400 mb-1">Mode de reconnaissance</label>
+                  <select
+                    value={recognitionMode}
+                    onChange={(e) => setRecognitionMode(e.target.value as 'all' | 'new_only')}
+                    disabled={isRecognizing}
+                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded text-white disabled:opacity-50"
+                  >
+                    <option value="new_only">Nouvelles images uniquement (recommandé)</option>
+                    <option value="all">Toutes les images (réanalyse complète)</option>
+                  </select>
+                  <p className="text-xs text-slate-500 mt-1">
+                    {recognitionMode === 'new_only'
+                      ? '💰 Ignore les images déjà analysées = économie de coûts API'
+                      : '⚠️ Réanalyse toutes les images = coûts élevés'}
+                  </p>
+                </div>
+
+                <div>
                   <label className="block text-sm text-slate-400 mb-1">Taille des lots (images par appel API)</label>
                   <input
                     type="number"
@@ -313,9 +340,15 @@ export default function FamilyAdmin() {
                   <h4 className="text-sm font-semibold text-green-400 mb-2">✅ Résultats</h4>
                   <div className="space-y-1 text-xs text-slate-300">
                     <div className="flex justify-between">
-                      <span>Images traitées:</span>
+                      <span>Images analysées:</span>
                       <span className="font-semibold">{recognitionResults.successful}</span>
                     </div>
+                    {recognitionResults.skipped > 0 && (
+                      <div className="flex justify-between">
+                        <span>Images ignorées:</span>
+                        <span className="font-semibold text-slate-400">{recognitionResults.skipped}</span>
+                      </div>
+                    )}
                     <div className="flex justify-between">
                       <span>Personnes détectées:</span>
                       <span className="font-semibold text-purple-300">{recognitionResults.total_people_detected}</span>
