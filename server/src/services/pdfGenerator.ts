@@ -165,6 +165,11 @@ export async function generateBookPdf(options: GeneratePdfOptions): Promise<PdfR
       for (let i = 0; i < pages.length; i++) {
         const page = pages[i];
 
+        // Skip pages without any actual content
+        if (!pageHasContent(page)) {
+          continue;
+        }
+
         if (pageMode === 'spread') {
           // One PDF page per spread (double page)
           doc.addPage();
@@ -191,6 +196,66 @@ export async function generateBookPdf(options: GeneratePdfOptions): Promise<PdfR
       reject(error);
     }
   });
+}
+
+// Check if a page has any renderable content (images or text)
+function pageHasContent(page: BookPage): boolean {
+  const template = page.template;
+  const slots = template?.layout?.slots || [];
+  const pageData = page.page_data;
+  const images = page.images || [];
+
+  if (slots.length === 0) return false;
+
+  // Create image map
+  const imageMap = new Map<string, Image>();
+  images.forEach(img => imageMap.set(img.id, img));
+
+  // Check if any image slot has an assigned image
+  for (const slot of slots) {
+    if (slot.type === 'text') {
+      const textData = pageData?.textSlots?.find(s => s.slot_id === slot.id);
+      if (textData?.content?.trim()) {
+        return true;
+      }
+    } else {
+      const slotData = pageData?.slots?.find(s => s.slot_id === slot.id);
+      if (slotData && imageMap.has(slotData.image_id)) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+// Check if a specific side (left/right) has content
+function sideHasContent(
+  slots: LayoutSlot[],
+  side: 'left' | 'right',
+  pageData: BookPage['page_data'],
+  imageMap: Map<string, Image>
+): boolean {
+  const sideSlots = slots.filter(s => {
+    if (s.width > 100) return side === 'left'; // Spanning slots counted as left
+    return s.page === side;
+  });
+
+  for (const slot of sideSlots) {
+    if (slot.type === 'text') {
+      const textData = pageData?.textSlots?.find(s => s.slot_id === slot.id);
+      if (textData?.content?.trim()) {
+        return true;
+      }
+    } else {
+      const slotData = pageData?.slots?.find(s => s.slot_id === slot.id);
+      if (slotData && imageMap.has(slotData.image_id)) {
+        return true;
+      }
+    }
+  }
+
+  return false;
 }
 
 async function renderSpread(
@@ -241,8 +306,8 @@ async function renderSinglePages(
   const pageWidth = formatConfig.singleWidth;
   const pageHeight = formatConfig.singleHeight;
 
-  // Render left page
-  if (leftSlots.length > 0) {
+  // Render left page only if it has content
+  if (leftSlots.length > 0 && sideHasContent(slots, 'left', pageData, imageMap)) {
     doc.addPage({ size: [pageWidth, pageHeight] });
     for (const slot of leftSlots) {
       const position = getSlotPositionSingle(slot, 'left', pageWidth, pageHeight);
@@ -254,8 +319,8 @@ async function renderSinglePages(
     }
   }
 
-  // Render right page
-  if (rightSlots.length > 0) {
+  // Render right page only if it has content
+  if (rightSlots.length > 0 && sideHasContent(slots, 'right', pageData, imageMap)) {
     doc.addPage({ size: [pageWidth, pageHeight] });
     for (const slot of rightSlots) {
       const position = getSlotPositionSingle(slot, 'right', pageWidth, pageHeight);
