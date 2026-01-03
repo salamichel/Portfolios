@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from '@google/generative-ai';
 import fs from 'fs';
 import path from 'path';
 import { imageDb, enrichmentConfigDb, EnrichmentConfig, GeminiModel, familyMemberDb, trainingImageDb, FamilyMember, BoundingBox } from '../database.js';
@@ -598,8 +598,28 @@ export async function recognizePeople(imagePath: string, uploadsDir: string): Pr
       return { people: [] };
     }
 
-    // Use Gemini Flash for speed
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+    // Use Gemini Flash for speed with relaxed safety settings for family photos
+    const model = genAI.getGenerativeModel({
+      model: 'gemini-2.5-flash',
+      safetySettings: [
+        {
+          category: HarmCategory.HARM_CATEGORY_HARASSMENT,
+          threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH
+        },
+        {
+          category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+          threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH
+        },
+        {
+          category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+          threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH
+        },
+        {
+          category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+          threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH
+        }
+      ]
+    });
 
     // Build training examples
     const { prompt: trainingPrompt, images: trainingImages } = buildTrainingExamplesPrompt(members, uploadsDir);
@@ -633,10 +653,13 @@ Pour chaque personne détectée, fournissez :
 IDs des membres :
 ${members.map(m => `- ${m.name}: "${m.id}"`).join('\n')}
 
-IMPORTANT :
-- Ne retournez que les personnes que vous reconnaissez avec une confiance >= 0.5
-- Si vous n'êtes pas sûr, ne devinez pas
-- Si aucune personne de la famille n'est détectée, retournez un tableau vide
+RÈGLES STRICTES :
+- NE retournez QUE les personnes qui correspondent VRAIMENT aux photos d'entraînement ci-dessus
+- Confiance minimale : 0.5 (50%)
+- Si vous n'êtes PAS SÛR à 100%, mettez un tableau VIDE
+- Si l'image ne contient AUCUNE personne → tableau VIDE
+- Si l'image contient des personnes INCONNUES (pas dans la liste) → tableau VIDE
+- NE DEVINEZ PAS : mieux vaut ne rien retourner que de se tromper
 
 Répondez au format JSON suivant :
 {
@@ -672,6 +695,15 @@ Répondez au format JSON suivant :
 
     const result = await model.generateContent(contentParts);
     const response = await result.response;
+
+    // CRITICAL: Check if response was blocked BEFORE calling .text()
+    if (response.promptFeedback?.blockReason) {
+      console.error(`[Gemini Blocked] Raison: ${response.promptFeedback.blockReason}`);
+      console.error(`[Gemini Blocked] Feedback:`, JSON.stringify(response.promptFeedback, null, 2));
+      console.warn(`⚠️ Gemini a bloqué la requête (probablement photos d'enfants). Retour de résultats vides.`);
+      return { people: [] };
+    }
+
     const text = response.text();
 
     // Extract JSON from response
@@ -719,8 +751,28 @@ export async function recognizePeopleBatch(
       return imagePaths.map(img => ({ image_id: img.id, people: [] }));
     }
 
-    // Use Gemini Flash for speed
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+    // Use Gemini Flash for speed with relaxed safety settings for family photos
+    const model = genAI.getGenerativeModel({
+      model: 'gemini-2.5-flash',
+      safetySettings: [
+        {
+          category: HarmCategory.HARM_CATEGORY_HARASSMENT,
+          threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH
+        },
+        {
+          category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+          threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH
+        },
+        {
+          category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+          threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH
+        },
+        {
+          category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+          threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH
+        }
+      ]
+    });
 
     // Build training examples ONCE for all images
     const { prompt: trainingPrompt, images: trainingImages } = buildTrainingExamplesPrompt(members, uploadsDir);
@@ -752,11 +804,14 @@ Pour CHAQUE image, fournissez :
 IDs des membres :
 ${memberIds}
 
-IMPORTANT :
-- Ne retournez que les personnes reconnues avec une confiance >= 0.5
-- Si vous n'êtes pas sûr, ne devinez pas
-- Si aucune personne n'est détectée dans une image, retournez un tableau vide pour cette image
-- Traitez TOUTES les ${imagePaths.length} images
+RÈGLES STRICTES :
+- NE retournez QUE les personnes qui correspondent VRAIMENT aux photos d'entraînement ci-dessus
+- Confiance minimale : 0.5 (50%)
+- Si vous n'êtes PAS SÛR à 100%, mettez un tableau VIDE
+- Si l'image ne contient AUCUNE personne → tableau VIDE
+- Si l'image contient des personnes INCONNUES (pas dans la liste) → tableau VIDE
+- NE DEVINEZ PAS : mieux vaut ne rien retourner que de se tromper
+- Traitez TOUTES les ${imagePaths.length} images (même celles sans personne)
 
 Répondez au format JSON suivant :
 {
@@ -808,6 +863,15 @@ Répondez au format JSON suivant :
 
     const result = await model.generateContent(contentParts);
     const response = await result.response;
+
+    // CRITICAL: Check if response was blocked BEFORE calling .text()
+    if (response.promptFeedback?.blockReason) {
+      console.error(`[Gemini Blocked] Raison: ${response.promptFeedback.blockReason}`);
+      console.error(`[Gemini Blocked] Feedback:`, JSON.stringify(response.promptFeedback, null, 2));
+      console.warn(`⚠️ Gemini a bloqué la requête (probablement photos d'enfants). Retour de résultats vides.`);
+      return imagePaths.map(img => ({ image_id: img.id, people: [] }));
+    }
+
     const text = response.text();
 
     // Extract JSON from response
