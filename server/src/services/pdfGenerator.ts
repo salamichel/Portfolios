@@ -701,9 +701,15 @@ async function renderTextSlot(
   position: SlotPosition
 ): Promise<void> {
   const textData = pageData?.textSlots?.find(s => s.slot_id === slot.id);
-  if (!textData || !textData.content?.trim()) return;
+  if (!textData || !textData.content?.trim()) {
+    console.log(`      renderTextSlot: no content for slot ${slot.id}`);
+    return;
+  }
 
   const { x, y, width, height } = position;
+  console.log(`      renderTextSlot: slot ${slot.id} at (${x.toFixed(0)}, ${y.toFixed(0)}) ${width.toFixed(0)}x${height.toFixed(0)}`);
+  console.log(`      renderTextSlot: content preview: "${textData.content.substring(0, 50)}..."`);
+
   const style = textData.style;
   const padding = 10;
 
