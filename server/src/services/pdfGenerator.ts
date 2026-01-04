@@ -743,10 +743,15 @@ async function renderTextSlot(
 
   // Parse and render each line
   const lines = textData.content.split('\n');
+  console.log(`      renderTextSlot: ${lines.length} lines, font=${fontBase}, color=${textColor}`);
 
+  let linesRendered = 0;
   for (const line of lines) {
     // Stop if we've exceeded the slot height
-    if (textY >= maxY) break;
+    if (textY >= maxY) {
+      console.log(`      renderTextSlot: stopped at line ${linesRendered}, textY=${textY.toFixed(0)} >= maxY=${maxY.toFixed(0)}`);
+      break;
+    }
 
     if (line.trim() === '') {
       textY += baseFontSize * 1.2;
@@ -778,6 +783,7 @@ async function renderTextSlot(
         align: align as 'left' | 'center' | 'right',
         lineGap: 2
       });
+      linesRendered++;
       textY = doc.y + (isHeading ? 6 : 3);
     } else {
       // Complex line with multiple fragments - render as a single line with mixed formatting
@@ -793,10 +799,12 @@ async function renderTextSlot(
         align: align as 'left' | 'center' | 'right',
         lineGap: 2
       });
+      linesRendered++;
       textY = doc.y + (isHeading ? 6 : 3);
     }
   }
 
+  console.log(`      renderTextSlot: rendered ${linesRendered} lines, final textY=${textY.toFixed(0)}`);
   doc.restore();
 }
 
