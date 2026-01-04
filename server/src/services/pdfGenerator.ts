@@ -152,6 +152,7 @@ export async function generateBookPdf(options: GeneratePdfOptions): Promise<PdfR
 
   console.log(`\n=== PDF Generation Debug ===`);
   console.log(`Book: ${book.name}, Pages: ${pages.length}, Mode: ${pageMode}`);
+  pdfPageCounter = 0; // Reset counter for each PDF generation
 
   return new Promise(async (resolve, reject) => {
     try {
@@ -205,7 +206,8 @@ export async function generateBookPdf(options: GeneratePdfOptions): Promise<PdfR
         }
       }
 
-      console.log(`\n=== PDF Generation Complete ===\n`);
+      console.log(`\n=== PDF Generation Complete ===`);
+      console.log(`Total PDF pages added: ${pdfPageCounter}\n`);
 
       doc.end();
 
@@ -320,6 +322,8 @@ async function renderSpread(
   }
 }
 
+let pdfPageCounter = 0; // Track actual PDF pages added
+
 async function renderSinglePages(
   doc: PDFKit.PDFDocument,
   page: BookPage,
@@ -350,7 +354,8 @@ async function renderSinglePages(
 
   // Render left page only if it has content
   if (leftSlots.length > 0 && leftHasContent) {
-    console.log(`    [Single] Adding LEFT page`);
+    pdfPageCounter++;
+    console.log(`    [Single] Adding LEFT page (PDF page ${pdfPageCounter})`);
     doc.addPage({ size: [pageWidth, pageHeight] });
     for (const slot of leftSlots) {
       const position = getSlotPositionSingle(slot, 'left', pageWidth, pageHeight);
@@ -364,7 +369,8 @@ async function renderSinglePages(
 
   // Render right page only if it has content
   if (rightSlots.length > 0 && rightHasContent) {
-    console.log(`    [Single] Adding RIGHT page`);
+    pdfPageCounter++;
+    console.log(`    [Single] Adding RIGHT page (PDF page ${pdfPageCounter})`);
     doc.addPage({ size: [pageWidth, pageHeight] });
     for (const slot of rightSlots) {
       const position = getSlotPositionSingle(slot, 'right', pageWidth, pageHeight);
