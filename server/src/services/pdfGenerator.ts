@@ -269,20 +269,27 @@ function sideHasContent(
     return s.page === side;
   });
 
+  console.log(`      sideHasContent(${side}): checking ${sideSlots.length} slots`);
+
   for (const slot of sideSlots) {
     if (slot.type === 'text') {
       const textData = pageData?.textSlots?.find(s => s.slot_id === slot.id);
-      if (textData?.content?.trim()) {
+      const hasText = !!(textData?.content?.trim());
+      console.log(`        Slot ${slot.id} (text): textData=${!!textData}, hasText=${hasText}`);
+      if (hasText) {
         return true;
       }
     } else {
       const slotData = pageData?.slots?.find(s => s.slot_id === slot.id);
-      if (slotData && imageMap.has(slotData.image_id)) {
+      const hasImage = !!(slotData && imageMap.has(slotData.image_id));
+      console.log(`        Slot ${slot.id} (image): slotData=${!!slotData}, hasImage=${hasImage}`);
+      if (hasImage) {
         return true;
       }
     }
   }
 
+  console.log(`      sideHasContent(${side}): returning false`);
   return false;
 }
 
