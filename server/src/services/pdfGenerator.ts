@@ -713,6 +713,12 @@ async function renderTextSlot(
   const style = textData.style;
   const padding = 10;
 
+  // DEBUG: Draw a light background to verify rendering works
+  doc.save();
+  doc.fillColor('#f0f0f0').rect(x, y, width, height).fill();
+  doc.restore();
+  console.log(`      renderTextSlot: DEBUG - drew background rect`);
+
   // Parse color
   const textColor = style?.color || '#1f2937';
 
