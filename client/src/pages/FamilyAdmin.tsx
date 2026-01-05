@@ -596,9 +596,23 @@ export default function FamilyAdmin() {
                       {image.people ? image.people.length : 0} 👤
                     </div>
 
-                    {/* Title on hover */}
+                    {/* People names and title on hover */}
                     <div className="absolute bottom-0 left-0 right-0 p-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                      <p className="text-sm font-medium truncate">{image.title || image.original_name}</p>
+                      {image.people && image.people.length > 0 && (
+                        <div className="mb-2 space-y-1">
+                          {image.people.map((person: any, idx: number) => (
+                            <div key={idx} className="flex items-center gap-1 text-xs bg-purple-600/90 rounded px-2 py-1">
+                              <span className="font-medium">{person.member?.name || 'Inconnu'}</span>
+                              <span className="text-purple-200 text-[10px]">
+                                ({Math.round((person.confidence || 0) * 100)}%)
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <p className="text-sm font-medium truncate bg-black/50 rounded px-2 py-1">
+                        {image.title || image.original_name}
+                      </p>
                     </div>
                   </div>
                 ))}
