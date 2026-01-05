@@ -569,8 +569,20 @@ router.post('/batch-recognize', async (req, res) => {
 
     console.log(`[Batch Recognition] Résumé: ${allResults.length} analysées, ${skipped.length} ignorées (déjà analysées), ${notFound.length} non trouvées`);
 
+    // Enrich results with member data
+    const enrichedResults = allResults.map(result => ({
+      ...result,
+      people: result.people.map(person => {
+        const member = person.family_member_id ? familyMemberDb.getById(person.family_member_id) : null;
+        return {
+          ...person,
+          member
+        };
+      })
+    }));
+
     res.json({
-      results: allResults,
+      results: enrichedResults,
       not_found: notFound,
       skipped: skipped,
       failed_batches: failedBatches,
