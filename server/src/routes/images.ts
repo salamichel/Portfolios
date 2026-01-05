@@ -57,17 +57,33 @@ const upload = multer({
 // Get all images with pagination
 router.get('/', (req, res) => {
   try {
-    const { theme_id, limit, offset, search, tag, mood } = req.query;
-    const result = imageDb.getAll({
-      theme_id: theme_id as string,
+    const { theme_id, limit, offset, search, tag, mood, person } = req.query;
+    console.log(`[GET /images] Raw query params - theme:${theme_id}, search:"${search}", tag:"${tag}", mood:"${mood}", person:"${person}"`);
+
+    // Filter out "undefined" strings (React sends these when state is undefined)
+    const cleanString = (val: any): string | undefined => {
+      if (!val || val === 'undefined' || val === 'null') return undefined;
+      return val as string;
+    };
+
+    const options = {
+      theme_id: cleanString(theme_id),
       limit: limit ? parseInt(limit as string) : 50,
       offset: offset ? parseInt(offset as string) : 0,
-      search: search as string,
-      tag: tag as string,
-      mood: mood as string
-    });
+      search: cleanString(search),
+      tag: cleanString(tag),
+      mood: cleanString(mood),
+      person: cleanString(person)
+    };
+
+    console.log(`[GET /images] Cleaned filters -`, JSON.stringify(options));
+
+    const result = imageDb.getAll(options);
+
+    console.log(`[GET /images] Returned ${result.images.length} images (total: ${result.total})`);
     res.json(result);
   } catch (error) {
+    console.error('[GET /images] Error:', error);
     res.status(500).json({ error: 'Failed to fetch images' });
   }
 });
@@ -229,6 +245,7 @@ router.post('/upload', upload.array('images', 50), async (req, res) => {
         mood: enrichment.mood,
         ai_enriched: enrichment.ai_enriched,
         enrichment_config_id: enrichment.enrichment_config_id,
+        family_analyzed: false,
         width: metadata.width || null,
         height: metadata.height || null,
         size: file.size,
@@ -546,6 +563,24 @@ router.delete('/:id', (req, res) => {
     res.status(204).send();
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete image' });
+  }
+});
+
+// Mark image as family analyzed (no people present) or reset for re-analysis
+router.post('/:id/mark-family-analyzed', (req, res) => {
+  try {
+    const image = imageDb.getById(req.params.id);
+    if (!image) {
+      return res.status(404).json({ error: 'Image not found' });
+    }
+
+    // If reset=true, mark as NOT analyzed (for re-analysis), otherwise mark as analyzed
+    const reset = req.query.reset === 'true';
+    const updated = imageDb.update(req.params.id, { family_analyzed: !reset });
+    res.json(updated);
+  } catch (error) {
+    console.error('Failed to mark image as family analyzed:', error);
+    res.status(500).json({ error: 'Failed to mark image as family analyzed' });
   }
 });
 

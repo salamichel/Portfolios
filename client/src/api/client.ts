@@ -1,7 +1,7 @@
 import axios from 'axios';
 import type { Theme, Image, PaginatedImages, Book, BookPage, PageTemplate, PageData, BookLayoutSuggestions, LayoutSuggestion, TagWithCount, MoodWithCount, EnrichmentConfig, GeminiModel } from '../types';
 
-const api = axios.create({
+export const api = axios.create({
   baseURL: '/api'
 });
 
@@ -28,7 +28,7 @@ export const themesApi = {
 
 // Images API
 export const imagesApi = {
-  getAll: (params?: { theme_id?: string; limit?: number; offset?: number; search?: string; tag?: string; mood?: string }) =>
+  getAll: (params?: { theme_id?: string; limit?: number; offset?: number; search?: string; tag?: string; mood?: string; person?: string }) =>
     api.get<PaginatedImages>('/images', { params }).then(res => res.data),
 
   getById: (id: string) => api.get<Image>(`/images/${id}`).then(res => res.data),

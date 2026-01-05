@@ -84,6 +84,15 @@ Portfolios/
 2. `server/src/database.ts` - `templateDb` fonctions
 3. `client/src/components/template/` - UI éditeur
 
+### Reconnaissance familiale (nouvelle fonctionnalité)
+1. `server/src/routes/family.ts` - CRUD membres famille, images d'entraînement, reconnaissance
+2. `server/src/database.ts` - `familyMemberDb`, `trainingImageDb`, `imagePeopleDb` fonctions
+3. `server/src/services/gemini.ts` - Fonction `recognizePeople()` utilisant Gemini AI
+4. `client/src/pages/FamilyAdmin.tsx` - UI gestion famille et entraînement
+5. `client/src/components/ImageGallery.tsx` - Affichage personnes détectées
+6. Accès via `/admin/family` ou icône 👥 dans le header
+7. Documentation complète dans `FAMILLE_RECONNAISSANCE.md`
+
 ## Base de données - Tables principales
 
 | Table | Description |
@@ -94,6 +103,9 @@ Portfolios/
 | `book_pages` | Pages double avec layout slots |
 | `page_templates` | Templates prédéfinis et personnalisés |
 | `enrichment_configs` | Configurations IA (prompts, modèles Gemini) |
+| `family_members` | **NOUVEAU** - Membres de famille pour reconnaissance faciale |
+| `training_images` | **NOUVEAU** - Photos d'entraînement associées à chaque membre |
+| `image_people` | **NOUVEAU** - Personnes détectées par IA dans les images |
 
 ## Patterns architecturaux
 

@@ -9,6 +9,7 @@ import booksRouter from './routes/books.js';
 import templatesRouter from './routes/templates.js';
 import cleanupRouter from './routes/cleanup.js';
 import enrichmentConfigsRouter from './routes/enrichment-configs.js';
+import familyRouter from './routes/family.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -45,6 +46,7 @@ app.use('/api/books', booksRouter);
 app.use('/api/templates', templatesRouter);
 app.use('/api/cleanup', cleanupRouter);
 app.use('/api/enrichment-configs', enrichmentConfigsRouter);
+app.use('/api/family', familyRouter);
 
 // Health check
 app.get('/api/health', (req, res) => {

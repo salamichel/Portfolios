@@ -154,6 +154,49 @@ db.exec(`
   );
 
   CREATE INDEX IF NOT EXISTS idx_enrichment_configs_default ON enrichment_configs(is_default);
+
+  -- Family members (for person recognition training)
+  CREATE TABLE IF NOT EXISTS family_members (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    relationship TEXT,
+    notes TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  -- Training images (uploaded photos for AI training - independent from gallery)
+  CREATE TABLE IF NOT EXISTS training_images (
+    id TEXT PRIMARY KEY,
+    filename TEXT NOT NULL,
+    original_name TEXT NOT NULL,
+    family_member_id TEXT NOT NULL,
+    size INTEGER,
+    mime_type TEXT,
+    bounding_box TEXT,
+    verified BOOLEAN DEFAULT FALSE,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (family_member_id) REFERENCES family_members(id) ON DELETE CASCADE
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_training_images_member ON training_images(family_member_id);
+
+  -- Image people (detected people in images by AI)
+  CREATE TABLE IF NOT EXISTS image_people (
+    id TEXT PRIMARY KEY,
+    image_id TEXT NOT NULL,
+    family_member_id TEXT,
+    confidence REAL,
+    bounding_box TEXT,
+    verified BOOLEAN DEFAULT FALSE,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (image_id) REFERENCES images(id) ON DELETE CASCADE,
+    FOREIGN KEY (family_member_id) REFERENCES family_members(id) ON DELETE SET NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_image_people_image ON image_people(image_id);
+  CREATE INDEX IF NOT EXISTS idx_image_people_member ON image_people(family_member_id);
 `);
 
 // Migration: Add position column if it doesn't exist (for existing databases)
@@ -195,11 +238,53 @@ try {
   // Column already exists, ignore error
 }
 
+// Migration: Add family_analyzed flag to images table
+try {
+  db.exec(`ALTER TABLE images ADD COLUMN family_analyzed BOOLEAN DEFAULT FALSE`);
+} catch {
+  // Column already exists, ignore error
+}
+
 // Migration: Add status column to books if it doesn't exist
 try {
   db.exec(`ALTER TABLE books ADD COLUMN status TEXT DEFAULT 'draft'`);
 } catch {
   // Column already exists, ignore error
+}
+
+// Migration: Update training_images to use direct file storage instead of image_id
+try {
+  // Check if old schema exists (has image_id column)
+  const tableInfo = db.prepare("PRAGMA table_info(training_images)").all() as Array<{ name: string }>;
+  const hasImageId = tableInfo.some(col => col.name === 'image_id');
+
+  if (hasImageId) {
+    // Drop and recreate with new schema
+    db.exec(`
+      DROP TABLE IF EXISTS training_images_old;
+      ALTER TABLE training_images RENAME TO training_images_old;
+
+      CREATE TABLE training_images (
+        id TEXT PRIMARY KEY,
+        filename TEXT NOT NULL,
+        original_name TEXT NOT NULL,
+        family_member_id TEXT NOT NULL,
+        size INTEGER,
+        mime_type TEXT,
+        bounding_box TEXT,
+        verified BOOLEAN DEFAULT FALSE,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (family_member_id) REFERENCES family_members(id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_training_images_member ON training_images(family_member_id);
+
+      DROP TABLE training_images_old;
+    `);
+    console.log('[Migration] Updated training_images schema to use direct file storage');
+  }
+} catch (error) {
+  console.error('[Migration] Failed to update training_images schema:', error);
 }
 
 export interface Theme {
@@ -224,6 +309,7 @@ export interface Image {
   mood: string | null;
   ai_enriched: boolean;
   enrichment_config_id: string | null;
+  family_analyzed: boolean;
   width: number | null;
   height: number | null;
   size: number;
@@ -399,6 +485,46 @@ export interface ImageEnrichmentReport {
   updated_at: string;
 }
 
+// Family recognition interfaces
+export interface FamilyMember {
+  id: string;
+  name: string;
+  relationship: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BoundingBox {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface TrainingImage {
+  id: string;
+  filename: string;
+  original_name: string;
+  family_member_id: string;
+  size: number | null;
+  mime_type: string | null;
+  bounding_box: string | null; // JSON string of BoundingBox
+  verified: boolean;
+  created_at: string;
+}
+
+export interface ImagePerson {
+  id: string;
+  image_id: string;
+  family_member_id: string | null;
+  confidence: number | null;
+  bounding_box: string | null; // JSON string of BoundingBox
+  verified: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 // Theme operations
 export const themeDb = {
   getAll(): Theme[] {
@@ -471,44 +597,75 @@ export const themeDb = {
 
 // Image operations
 export const imageDb = {
-  getAll(options: { theme_id?: string; limit?: number; offset?: number; search?: string; tag?: string; mood?: string } = {}): { images: Image[]; total: number } {
+  getAll(options: { theme_id?: string; limit?: number; offset?: number; search?: string; tag?: string; mood?: string; person?: string } = {}): { images: Image[]; total: number } {
+    let fromClause = 'images';
     let whereClause = '1=1';
     const params: any[] = [];
 
+    console.log(`[imageDb.getAll] Options:`, JSON.stringify(options));
+
+    // Handle person filter
+    if (options.person === 'none') {
+      // Images WITHOUT any detected person (LEFT JOIN + IS NULL)
+      fromClause = 'images LEFT JOIN image_people ON images.id = image_people.image_id';
+      whereClause += ' AND image_people.id IS NULL';
+      console.log(`[imageDb.getAll] Filtering by: NO person detected`);
+    } else if (options.person) {
+      // Images WITH a specific person (INNER JOIN)
+      fromClause = 'images INNER JOIN image_people ON images.id = image_people.image_id';
+      whereClause += ' AND image_people.family_member_id = ?';
+      params.push(options.person);
+      console.log(`[imageDb.getAll] Filtering by person: ${options.person}`);
+    }
+
     if (options.theme_id) {
-      whereClause += ' AND theme_id = ?';
+      whereClause += ' AND images.theme_id = ?';
       params.push(options.theme_id);
     }
 
     if (options.search) {
-      whereClause += ' AND (title LIKE ? OR description LIKE ? OR tags LIKE ? OR filename LIKE ? OR original_name LIKE ?)';
+      whereClause += ' AND (images.title LIKE ? OR images.description LIKE ? OR images.tags LIKE ? OR images.filename LIKE ? OR images.original_name LIKE ?)';
       const searchTerm = `%${options.search}%`;
       params.push(searchTerm, searchTerm, searchTerm, searchTerm, searchTerm);
     }
 
     if (options.tag) {
-      whereClause += ' AND tags LIKE ?';
+      whereClause += ' AND images.tags LIKE ?';
       params.push(`%${options.tag}%`);
     }
 
     if (options.mood) {
-      whereClause += ' AND mood = ?';
+      whereClause += ' AND images.mood = ?';
       params.push(options.mood);
     }
 
-    const total = db.prepare(`SELECT COUNT(*) as count FROM images WHERE ${whereClause}`).get(...params) as { count: number };
+    const countQuery = `SELECT COUNT(DISTINCT images.id) as count FROM ${fromClause} WHERE ${whereClause}`;
+    console.log(`[imageDb.getAll] Count SQL: ${countQuery}`);
+    console.log(`[imageDb.getAll] Params:`, params);
+
+    const total = db.prepare(countQuery).get(...params) as { count: number };
 
     const limit = options.limit || 50;
     const offset = options.offset || 0;
 
-    const images = db.prepare(`
-      SELECT * FROM images
-      WHERE ${whereClause}
-      ORDER BY created_at DESC
-      LIMIT ? OFFSET ?
-    `).all(...params, limit, offset) as Image[];
+    const selectQuery = `SELECT DISTINCT images.* FROM ${fromClause} WHERE ${whereClause} ORDER BY images.created_at DESC LIMIT ? OFFSET ?`;
+    console.log(`[imageDb.getAll] Select SQL: ${selectQuery}`);
 
-    return { images, total: total.count };
+    const images = db.prepare(selectQuery).all(...params, limit, offset) as Image[];
+
+    console.log(`[imageDb.getAll] Found ${images.length} images (total: ${total.count})`);
+
+    // Enrich images with detected people
+    const enrichedImages = images.map(img => {
+      const people = imagePeopleDb.getByImageId(img.id);
+      const enrichedPeople = people.map(p => {
+        const member = p.family_member_id ? familyMemberDb.getById(p.family_member_id) : null;
+        return { ...p, member };
+      });
+      return { ...img, people: enrichedPeople };
+    });
+
+    return { images: enrichedImages, total: total.count };
   },
 
   getById(id: string): Image | undefined {
@@ -517,12 +674,12 @@ export const imageDb = {
 
   create(image: Omit<Image, 'created_at' | 'updated_at'>): Image {
     db.prepare(`
-      INSERT INTO images (id, filename, original_name, theme_id, title, description, tags, mood, ai_enriched, enrichment_config_id, width, height, size, mime_type)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO images (id, filename, original_name, theme_id, title, description, tags, mood, ai_enriched, enrichment_config_id, family_analyzed, width, height, size, mime_type)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       image.id, image.filename, image.original_name, image.theme_id,
       image.title, image.description, image.tags, image.mood, image.ai_enriched ? 1 : 0,
-      image.enrichment_config_id, image.width, image.height, image.size, image.mime_type
+      image.enrichment_config_id, image.family_analyzed ? 1 : 0, image.width, image.height, image.size, image.mime_type
     );
     return this.getById(image.id)!;
   },
@@ -538,6 +695,7 @@ export const imageDb = {
     if (data.mood !== undefined) { fields.push('mood = ?'); values.push(data.mood); }
     if (data.ai_enriched !== undefined) { fields.push('ai_enriched = ?'); values.push(data.ai_enriched ? 1 : 0); }
     if (data.enrichment_config_id !== undefined) { fields.push('enrichment_config_id = ?'); values.push(data.enrichment_config_id); }
+    if (data.family_analyzed !== undefined) { fields.push('family_analyzed = ?'); values.push(data.family_analyzed ? 1 : 0); }
 
     if (fields.length === 0) return this.getById(id);
 
@@ -1590,6 +1748,191 @@ IMPORTANT :
       model: 'gemini-3-flash-preview',
       is_default: true
     });
+  }
+};
+
+// Family member operations
+export const familyMemberDb = {
+  getAll(): FamilyMember[] {
+    return db.prepare('SELECT * FROM family_members ORDER BY name').all() as FamilyMember[];
+  },
+
+  getById(id: string): FamilyMember | undefined {
+    return db.prepare('SELECT * FROM family_members WHERE id = ?').get(id) as FamilyMember | undefined;
+  },
+
+  create(member: Omit<FamilyMember, 'created_at' | 'updated_at'>): FamilyMember {
+    db.prepare(`
+      INSERT INTO family_members (id, name, relationship, notes)
+      VALUES (?, ?, ?, ?)
+    `).run(member.id, member.name, member.relationship, member.notes);
+    return this.getById(member.id)!;
+  },
+
+  update(id: string, updates: Partial<Omit<FamilyMember, 'id' | 'created_at' | 'updated_at'>>): FamilyMember | undefined {
+    const fields: string[] = [];
+    const values: any[] = [];
+
+    if (updates.name !== undefined) {
+      fields.push('name = ?');
+      values.push(updates.name);
+    }
+    if (updates.relationship !== undefined) {
+      fields.push('relationship = ?');
+      values.push(updates.relationship);
+    }
+    if (updates.notes !== undefined) {
+      fields.push('notes = ?');
+      values.push(updates.notes);
+    }
+
+    if (fields.length === 0) return this.getById(id);
+
+    fields.push('updated_at = CURRENT_TIMESTAMP');
+    values.push(id);
+
+    db.prepare(`UPDATE family_members SET ${fields.join(', ')} WHERE id = ?`).run(...values);
+    return this.getById(id);
+  },
+
+  delete(id: string): boolean {
+    const result = db.prepare('DELETE FROM family_members WHERE id = ?').run(id);
+    return result.changes > 0;
+  },
+
+  getTrainingImageCount(memberId: string): number {
+    const result = db.prepare('SELECT COUNT(*) as count FROM training_images WHERE family_member_id = ?').get(memberId) as { count: number };
+    return result.count;
+  }
+};
+
+// Training image operations
+export const trainingImageDb = {
+  getAll(): TrainingImage[] {
+    return db.prepare('SELECT * FROM training_images ORDER BY created_at DESC').all() as TrainingImage[];
+  },
+
+  getByMemberId(memberId: string): TrainingImage[] {
+    return db.prepare('SELECT * FROM training_images WHERE family_member_id = ?').all(memberId) as TrainingImage[];
+  },
+
+  getById(id: string): TrainingImage | undefined {
+    return db.prepare('SELECT * FROM training_images WHERE id = ?').get(id) as TrainingImage | undefined;
+  },
+
+  create(training: Omit<TrainingImage, 'created_at'>): TrainingImage {
+    db.prepare(`
+      INSERT INTO training_images (id, filename, original_name, family_member_id, size, mime_type, bounding_box, verified)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      training.id,
+      training.filename,
+      training.original_name,
+      training.family_member_id,
+      training.size,
+      training.mime_type,
+      training.bounding_box,
+      training.verified ? 1 : 0
+    );
+    return this.getById(training.id)!;
+  },
+
+  update(id: string, updates: Partial<Omit<TrainingImage, 'id' | 'created_at'>>): TrainingImage | undefined {
+    const fields: string[] = [];
+    const values: any[] = [];
+
+    if (updates.bounding_box !== undefined) {
+      fields.push('bounding_box = ?');
+      values.push(updates.bounding_box);
+    }
+    if (updates.verified !== undefined) {
+      fields.push('verified = ?');
+      values.push(updates.verified ? 1 : 0);
+    }
+
+    if (fields.length === 0) return this.getById(id);
+
+    values.push(id);
+    db.prepare(`UPDATE training_images SET ${fields.join(', ')} WHERE id = ?`).run(...values);
+    return this.getById(id);
+  },
+
+  delete(id: string): boolean {
+    const result = db.prepare('DELETE FROM training_images WHERE id = ?').run(id);
+    return result.changes > 0;
+  }
+};
+
+// Image people operations (AI-detected people)
+export const imagePeopleDb = {
+  getAll(): ImagePerson[] {
+    return db.prepare('SELECT * FROM image_people ORDER BY created_at DESC').all() as ImagePerson[];
+  },
+
+  getByImageId(imageId: string): ImagePerson[] {
+    return db.prepare('SELECT * FROM image_people WHERE image_id = ?').all(imageId) as ImagePerson[];
+  },
+
+  getByMemberId(memberId: string): ImagePerson[] {
+    return db.prepare('SELECT * FROM image_people WHERE family_member_id = ?').all(memberId) as ImagePerson[];
+  },
+
+  getById(id: string): ImagePerson | undefined {
+    return db.prepare('SELECT * FROM image_people WHERE id = ?').get(id) as ImagePerson | undefined;
+  },
+
+  create(person: Omit<ImagePerson, 'created_at' | 'updated_at'>): ImagePerson {
+    db.prepare(`
+      INSERT INTO image_people (id, image_id, family_member_id, confidence, bounding_box, verified)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(person.id, person.image_id, person.family_member_id, person.confidence, person.bounding_box, person.verified ? 1 : 0);
+    return this.getById(person.id)!;
+  },
+
+  update(id: string, updates: Partial<Omit<ImagePerson, 'id' | 'created_at' | 'updated_at'>>): ImagePerson | undefined {
+    const fields: string[] = [];
+    const values: any[] = [];
+
+    if (updates.family_member_id !== undefined) {
+      fields.push('family_member_id = ?');
+      values.push(updates.family_member_id);
+    }
+    if (updates.confidence !== undefined) {
+      fields.push('confidence = ?');
+      values.push(updates.confidence);
+    }
+    if (updates.bounding_box !== undefined) {
+      fields.push('bounding_box = ?');
+      values.push(updates.bounding_box);
+    }
+    if (updates.verified !== undefined) {
+      fields.push('verified = ?');
+      values.push(updates.verified ? 1 : 0);
+    }
+
+    if (fields.length === 0) return this.getById(id);
+
+    fields.push('updated_at = CURRENT_TIMESTAMP');
+    values.push(id);
+
+    db.prepare(`UPDATE image_people SET ${fields.join(', ')} WHERE id = ?`).run(...values);
+    return this.getById(id);
+  },
+
+  delete(id: string): boolean {
+    const result = db.prepare('DELETE FROM image_people WHERE id = ?').run(id);
+    return result.changes > 0;
+  },
+
+  deleteByImageId(imageId: string): boolean {
+    const result = db.prepare('DELETE FROM image_people WHERE image_id = ?').run(imageId);
+    return result.changes > 0;
+  },
+
+  // Get images with detected people
+  getImagesWithPeople(): string[] {
+    const results = db.prepare('SELECT DISTINCT image_id FROM image_people').all() as { image_id: string }[];
+    return results.map(r => r.image_id);
   }
 };
 
