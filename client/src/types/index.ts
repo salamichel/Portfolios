@@ -21,6 +21,7 @@ export interface Image {
   mood: string | null;
   ai_enriched: boolean;
   enrichment_config_id: string | null;
+  family_analyzed: boolean;
   width: number | null;
   height: number | null;
   size: number;

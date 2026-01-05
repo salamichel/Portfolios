@@ -238,6 +238,13 @@ try {
   // Column already exists, ignore error
 }
 
+// Migration: Add family_analyzed flag to images table
+try {
+  db.exec(`ALTER TABLE images ADD COLUMN family_analyzed BOOLEAN DEFAULT FALSE`);
+} catch {
+  // Column already exists, ignore error
+}
+
 // Migration: Add status column to books if it doesn't exist
 try {
   db.exec(`ALTER TABLE books ADD COLUMN status TEXT DEFAULT 'draft'`);
@@ -302,6 +309,7 @@ export interface Image {
   mood: string | null;
   ai_enriched: boolean;
   enrichment_config_id: string | null;
+  family_analyzed: boolean;
   width: number | null;
   height: number | null;
   size: number;
@@ -666,12 +674,12 @@ export const imageDb = {
 
   create(image: Omit<Image, 'created_at' | 'updated_at'>): Image {
     db.prepare(`
-      INSERT INTO images (id, filename, original_name, theme_id, title, description, tags, mood, ai_enriched, enrichment_config_id, width, height, size, mime_type)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO images (id, filename, original_name, theme_id, title, description, tags, mood, ai_enriched, enrichment_config_id, family_analyzed, width, height, size, mime_type)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       image.id, image.filename, image.original_name, image.theme_id,
       image.title, image.description, image.tags, image.mood, image.ai_enriched ? 1 : 0,
-      image.enrichment_config_id, image.width, image.height, image.size, image.mime_type
+      image.enrichment_config_id, image.family_analyzed ? 1 : 0, image.width, image.height, image.size, image.mime_type
     );
     return this.getById(image.id)!;
   },
@@ -687,6 +695,7 @@ export const imageDb = {
     if (data.mood !== undefined) { fields.push('mood = ?'); values.push(data.mood); }
     if (data.ai_enriched !== undefined) { fields.push('ai_enriched = ?'); values.push(data.ai_enriched ? 1 : 0); }
     if (data.enrichment_config_id !== undefined) { fields.push('enrichment_config_id = ?'); values.push(data.enrichment_config_id); }
+    if (data.family_analyzed !== undefined) { fields.push('family_analyzed = ?'); values.push(data.family_analyzed ? 1 : 0); }
 
     if (fields.length === 0) return this.getById(id);
 

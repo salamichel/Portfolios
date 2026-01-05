@@ -116,6 +116,31 @@ export default function FamilyAdmin() {
     }
   };
 
+  const handleMarkAsNoPerson = async () => {
+    if (!selectedImage) return;
+
+    if (!confirm('Marquer cette image comme "Aucune personne" ?\n\nCette image ne sera plus analysée lors des reconnaissances futures.')) {
+      return;
+    }
+
+    try {
+      await api.post(`/images/${selectedImage.id}/mark-family-analyzed`);
+
+      // Remove all detected people for this image
+      const peopleIds = detectedPeople.map(p => p.id);
+      for (const personId of peopleIds) {
+        await api.delete(`/family/people/${personId}`);
+      }
+
+      setDetectedPeople([]);
+      alert('Image marquée comme "Aucune personne". Elle ne sera plus analysée.');
+      setSelectedImage(null);
+    } catch (error) {
+      console.error('Failed to mark as no person:', error);
+      alert('Échec de l\'opération');
+    }
+  };
+
   const loadMembers = async () => {
     try {
       setIsLoading(true);
@@ -844,6 +869,19 @@ export default function FamilyAdmin() {
                           >
                             Ajouter
                           </button>
+                        </div>
+
+                        {/* Mark as No Person */}
+                        <div className="mt-4">
+                          <button
+                            onClick={handleMarkAsNoPerson}
+                            className="w-full px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded text-sm font-medium transition-colors text-center"
+                          >
+                            🚫 Marquer comme "Aucune personne"
+                          </button>
+                          <p className="text-xs text-slate-500 mt-2">
+                            Cette image ne sera plus analysée lors des reconnaissances futures
+                          </p>
                         </div>
                       </div>
                     </>

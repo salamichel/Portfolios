@@ -245,6 +245,7 @@ router.post('/upload', upload.array('images', 50), async (req, res) => {
         mood: enrichment.mood,
         ai_enriched: enrichment.ai_enriched,
         enrichment_config_id: enrichment.enrichment_config_id,
+        family_analyzed: false,
         width: metadata.width || null,
         height: metadata.height || null,
         size: file.size,
@@ -562,6 +563,22 @@ router.delete('/:id', (req, res) => {
     res.status(204).send();
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete image' });
+  }
+});
+
+// Mark image as family analyzed (no people present)
+router.post('/:id/mark-family-analyzed', (req, res) => {
+  try {
+    const image = imageDb.getById(req.params.id);
+    if (!image) {
+      return res.status(404).json({ error: 'Image not found' });
+    }
+
+    const updated = imageDb.update(req.params.id, { family_analyzed: true });
+    res.json(updated);
+  } catch (error) {
+    console.error('Failed to mark image as family analyzed:', error);
+    res.status(500).json({ error: 'Failed to mark image as family analyzed' });
   }
 });
 

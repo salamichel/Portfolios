@@ -479,6 +479,11 @@ router.post('/batch-recognize', async (req, res) => {
 
       // Skip images already analyzed if mode is 'new_only'
       if (mode === 'new_only') {
+        // Skip if already marked as analyzed OR if it has detected people
+        if (image.family_analyzed) {
+          skipped.push(imageId);
+          continue;
+        }
         const existingPeople = imagePeopleDb.getByImageId(imageId);
         if (existingPeople.length > 0) {
           skipped.push(imageId);
@@ -551,6 +556,9 @@ router.post('/batch-recognize', async (req, res) => {
           imagePeopleDb.create(personRecord);
           savedCount++;
         }
+
+        // Mark image as analyzed
+        imageDb.update(result.image_id, { family_analyzed: true });
       }
       console.log(`[Batch Save] ✅ Total sauvegardé: ${savedCount} détections`);
     }
