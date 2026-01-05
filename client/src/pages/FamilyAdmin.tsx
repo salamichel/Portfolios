@@ -98,14 +98,22 @@ export default function FamilyAdmin() {
 
     try {
       await api.delete(`/family/people/${personId}`);
-      setDetectedPeople(prev => prev.filter(p => p.id !== personId));
+      const remainingPeople = detectedPeople.filter(p => p.id !== personId);
+      setDetectedPeople(remainingPeople);
+
+      // If no more people detected, reset family_analyzed flag so it can be re-analyzed
+      if (selectedImage && remainingPeople.length === 0) {
+        await api.post(`/images/${selectedImage.id}/mark-family-analyzed`, {}, {
+          params: { reset: true }
+        });
+      }
 
       // Update the processedImages list if this image is in it
       if (selectedImage) {
         setProcessedImages(prev =>
           prev.map(img =>
             img.id === selectedImage.id
-              ? { ...img, people: (img.people || []).filter(p => p.id !== personId) }
+              ? { ...img, people: remainingPeople }
               : img
           )
         );

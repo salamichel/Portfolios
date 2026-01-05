@@ -566,7 +566,7 @@ router.delete('/:id', (req, res) => {
   }
 });
 
-// Mark image as family analyzed (no people present)
+// Mark image as family analyzed (no people present) or reset for re-analysis
 router.post('/:id/mark-family-analyzed', (req, res) => {
   try {
     const image = imageDb.getById(req.params.id);
@@ -574,7 +574,9 @@ router.post('/:id/mark-family-analyzed', (req, res) => {
       return res.status(404).json({ error: 'Image not found' });
     }
 
-    const updated = imageDb.update(req.params.id, { family_analyzed: true });
+    // If reset=true, mark as NOT analyzed (for re-analysis), otherwise mark as analyzed
+    const reset = req.query.reset === 'true';
+    const updated = imageDb.update(req.params.id, { family_analyzed: !reset });
     res.json(updated);
   } catch (error) {
     console.error('Failed to mark image as family analyzed:', error);
