@@ -552,6 +552,49 @@ export default function FamilyAdmin() {
               </div>
             </div>
           </div>
+
+          {/* Processed Images Grid */}
+          {processedImages.length > 0 && (
+            <div className="mt-6 bg-gradient-to-r from-green-900/30 to-emerald-900/30 border border-green-500/30 rounded-lg p-6">
+              <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+                <span>📸</span>
+                Images analysées dans cette reconnaissance ({processedImages.length})
+              </h2>
+              <p className="text-sm text-slate-300 mb-4">
+                Résultats de la dernière analyse. Cliquez sur une image pour voir les personnes détectées et corriger si nécessaire.
+              </p>
+
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+                {processedImages.map(image => (
+                  <div
+                    key={image.id}
+                    className="group relative aspect-square overflow-hidden rounded-lg bg-gray-800 cursor-pointer"
+                    onClick={() => setSelectedImage(image)}
+                  >
+                    <img
+                      src={getThumbnailUrl(image.filename)}
+                      alt={image.title || image.original_name}
+                      className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                      loading="lazy"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+
+                    {/* People count badge */}
+                    {image.people && image.people.length > 0 && (
+                      <div className="absolute top-2 right-2 bg-purple-600/90 text-white rounded-full px-2 py-1 text-xs font-semibold">
+                        {image.people.length} 👤
+                      </div>
+                    )}
+
+                    {/* Title on hover */}
+                    <div className="absolute bottom-0 left-0 right-0 p-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                      <p className="text-sm font-medium truncate">{image.title || image.original_name}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -713,49 +756,6 @@ export default function FamilyAdmin() {
             )}
           </div>
         </div>
-
-        {/* Processed Images Grid */}
-        {processedImages.length > 0 && (
-          <div className="mt-6 bg-gradient-to-r from-green-900/30 to-emerald-900/30 border border-green-500/30 rounded-lg p-6">
-            <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-              <span>📸</span>
-              Images analysées dans cette reconnaissance ({processedImages.length})
-            </h2>
-            <p className="text-sm text-slate-300 mb-4">
-              Résultats de la dernière analyse. Cliquez sur une image pour voir les personnes détectées et corriger si nécessaire.
-            </p>
-
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
-              {processedImages.map(image => (
-                <div
-                  key={image.id}
-                  className="group relative aspect-square overflow-hidden rounded-lg bg-gray-800 cursor-pointer"
-                  onClick={() => setSelectedImage(image)}
-                >
-                  <img
-                    src={getThumbnailUrl(image.filename)}
-                    alt={image.title || image.original_name}
-                    className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                    loading="lazy"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-
-                  {/* People count badge */}
-                  {image.people && image.people.length > 0 && (
-                    <div className="absolute top-2 right-2 bg-purple-600/90 text-white rounded-full px-2 py-1 text-xs font-semibold">
-                      {image.people.length} 👤
-                    </div>
-                  )}
-
-                  {/* Title on hover */}
-                  <div className="absolute bottom-0 left-0 right-0 p-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                    <p className="text-sm font-medium truncate">{image.title || image.original_name}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
 
         {/* Info box */}
         <div className="mt-6 bg-blue-900/20 border border-blue-800 rounded-lg p-6">
