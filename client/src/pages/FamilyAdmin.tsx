@@ -272,40 +272,33 @@ export default function FamilyAdmin() {
       if (summary.total_people_detected > 0) {
         addLog(`📥 Chargement de toutes les images avec détections...`);
         try {
-          // Get all images with people using the /family/people endpoint
-          const peopleResponse = await api.get('/family/people');
-          const allPeople = peopleResponse.data;
+          // Get all images with people using the /family/images-with-people endpoint
+          const imagesResponse = await api.get('/family/images-with-people');
+          const imagesWithPeople = imagesResponse.data;
 
-          console.log(`[FamilyAdmin] Found ${allPeople.length} total detections`);
+          console.log(`[FamilyAdmin] Found ${imagesWithPeople.length} images with people`);
 
-          // Group by image_id
-          const imageIdsWithPeople = [...new Set(allPeople.map((p: any) => p.image_id))] as string[];
-          console.log(`[FamilyAdmin] ${imageIdsWithPeople.length} unique images with people`);
-
-          if (imageIdsWithPeople.length > 0) {
-            // Load all images with their people
+          if (imagesWithPeople.length > 0) {
+            // Load people for each image
             const enrichedImages = await Promise.all(
-              imageIdsWithPeople.map(async (imageId) => {
+              imagesWithPeople.map(async (img: Image) => {
                 try {
-                  const imgResponse = await api.get(`/images/${imageId}`);
-                  const img = imgResponse.data;
-
                   // Get people for this image
-                  const imgPeople = allPeople.filter((p: any) => p.image_id === imageId);
+                  const peopleResponse = await api.get(`/family/images/${img.id}/people`);
+                  const imgPeople = peopleResponse.data;
 
                   console.log(`[FamilyAdmin] Image ${img.filename}: ${imgPeople.length} people`);
                   return { ...img, people: imgPeople };
                 } catch (err) {
-                  console.error(`[FamilyAdmin] Failed to load image ${imageId}:`, err);
-                  return null;
+                  console.error(`[FamilyAdmin] Failed to load people for image ${img.id}:`, err);
+                  return { ...img, people: [] };
                 }
               })
             );
 
-            const validImages = enrichedImages.filter((img): img is Image => img !== null);
-            console.log(`[FamilyAdmin] Setting ${validImages.length} processed images`);
-            setProcessedImages(validImages);
-            addLog(`✅ ${validImages.length} images avec détections chargées`);
+            console.log(`[FamilyAdmin] Setting ${enrichedImages.length} processed images`);
+            setProcessedImages(enrichedImages);
+            addLog(`✅ ${enrichedImages.length} images avec détections chargées`);
           }
         } catch (err) {
           console.error('[FamilyAdmin] Error loading images:', err);
