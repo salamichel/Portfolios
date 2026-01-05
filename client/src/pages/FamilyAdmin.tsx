@@ -266,20 +266,53 @@ export default function FamilyAdmin() {
       setRecognitionResults(summary);
       setRecognitionProgress({ current: summary.successful, total: imageIds.length });
 
-      // Enrich processed images with full image data and people
-      if (results.length > 0) {
-        addLog(`📥 Chargement des détails des images traitées...`);
-        const enrichedImages = await Promise.all(
-          results
-            .filter((r: any) => r.people && r.people.length > 0)
-            .map(async (r: any) => {
-              const imgResponse = await api.get(`/images/${r.image_id}`);
-              const img = imgResponse.data;
-              return { ...img, people: r.people };
-            })
-        );
-        setProcessedImages(enrichedImages);
-        addLog(`✅ ${enrichedImages.length} images avec détections chargées`);
+      console.log('[FamilyAdmin] Recognition results:', results.length, 'results');
+
+      // Load ALL images with people detections (not just newly analyzed ones)
+      if (summary.total_people_detected > 0) {
+        addLog(`📥 Chargement de toutes les images avec détections...`);
+        try {
+          // Get all images with people using the /family/people endpoint
+          const peopleResponse = await api.get('/family/people');
+          const allPeople = peopleResponse.data;
+
+          console.log(`[FamilyAdmin] Found ${allPeople.length} total detections`);
+
+          // Group by image_id
+          const imageIdsWithPeople = [...new Set(allPeople.map((p: any) => p.image_id))] as string[];
+          console.log(`[FamilyAdmin] ${imageIdsWithPeople.length} unique images with people`);
+
+          if (imageIdsWithPeople.length > 0) {
+            // Load all images with their people
+            const enrichedImages = await Promise.all(
+              imageIdsWithPeople.map(async (imageId) => {
+                try {
+                  const imgResponse = await api.get(`/images/${imageId}`);
+                  const img = imgResponse.data;
+
+                  // Get people for this image
+                  const imgPeople = allPeople.filter((p: any) => p.image_id === imageId);
+
+                  console.log(`[FamilyAdmin] Image ${img.filename}: ${imgPeople.length} people`);
+                  return { ...img, people: imgPeople };
+                } catch (err) {
+                  console.error(`[FamilyAdmin] Failed to load image ${imageId}:`, err);
+                  return null;
+                }
+              })
+            );
+
+            const validImages = enrichedImages.filter((img): img is Image => img !== null);
+            console.log(`[FamilyAdmin] Setting ${validImages.length} processed images`);
+            setProcessedImages(validImages);
+            addLog(`✅ ${validImages.length} images avec détections chargées`);
+          }
+        } catch (err) {
+          console.error('[FamilyAdmin] Error loading images:', err);
+          addLog(`⚠️ Erreur lors du chargement des images: ${err}`);
+        }
+      } else {
+        addLog(`⚠️ Aucune personne détectée dans cette analyse`);
       }
 
       addLog(`\n🎉 RECONNAISSANCE TERMINÉE !`);
