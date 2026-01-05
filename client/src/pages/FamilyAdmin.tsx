@@ -20,7 +20,7 @@ export default function FamilyAdmin() {
 
   // Batch recognition state
   const [isRecognizing, setIsRecognizing] = useState(false);
-  const [batchSize, setBatchSize] = useState(5); // Réduit à 5 pour éviter les erreurs Gemini
+  const [batchSize, setBatchSize] = useState(20);
   const [recognitionMode, setRecognitionMode] = useState<'all' | 'new_only'>('new_only');
   const [recognitionProgress, setRecognitionProgress] = useState({ current: 0, total: 0 });
   const [recognitionLogs, setRecognitionLogs] = useState<string[]>([]);
