@@ -268,44 +268,36 @@ export default function FamilyAdmin() {
 
       console.log('[FamilyAdmin] Recognition results:', results.length, 'results');
 
-      // Load ALL images with people detections (not just newly analyzed ones)
-      if (summary.total_people_detected > 0) {
-        addLog(`📥 Chargement de toutes les images avec détections...`);
+      // Load details for images analyzed in THIS recognition session only
+      if (results.length > 0) {
+        addLog(`📥 Chargement des ${results.length} images analysées...`);
         try {
-          // Get all images with people using the /family/images-with-people endpoint
-          const imagesResponse = await api.get('/family/images-with-people');
-          const imagesWithPeople = imagesResponse.data;
+          // Load full image data for each result
+          const enrichedImages = await Promise.all(
+            results.map(async (r: any) => {
+              try {
+                const imgResponse = await api.get(`/images/${r.image_id}`);
+                const img = imgResponse.data;
 
-          console.log(`[FamilyAdmin] Found ${imagesWithPeople.length} images with people`);
+                console.log(`[FamilyAdmin] Image ${img.filename}: ${r.people?.length || 0} people`);
+                return { ...img, people: r.people || [] };
+              } catch (err) {
+                console.error(`[FamilyAdmin] Failed to load image ${r.image_id}:`, err);
+                return null;
+              }
+            })
+          );
 
-          if (imagesWithPeople.length > 0) {
-            // Load people for each image
-            const enrichedImages = await Promise.all(
-              imagesWithPeople.map(async (img: Image) => {
-                try {
-                  // Get people for this image
-                  const peopleResponse = await api.get(`/family/images/${img.id}/people`);
-                  const imgPeople = peopleResponse.data;
-
-                  console.log(`[FamilyAdmin] Image ${img.filename}: ${imgPeople.length} people`);
-                  return { ...img, people: imgPeople };
-                } catch (err) {
-                  console.error(`[FamilyAdmin] Failed to load people for image ${img.id}:`, err);
-                  return { ...img, people: [] };
-                }
-              })
-            );
-
-            console.log(`[FamilyAdmin] Setting ${enrichedImages.length} processed images`);
-            setProcessedImages(enrichedImages);
-            addLog(`✅ ${enrichedImages.length} images avec détections chargées`);
-          }
+          const validImages = enrichedImages.filter((img): img is Image & { people: any[] } => img !== null);
+          console.log(`[FamilyAdmin] Setting ${validImages.length} processed images`);
+          setProcessedImages(validImages);
+          addLog(`✅ ${validImages.length} images de cette reconnaissance chargées`);
         } catch (err) {
           console.error('[FamilyAdmin] Error loading images:', err);
           addLog(`⚠️ Erreur lors du chargement des images: ${err}`);
         }
       } else {
-        addLog(`⚠️ Aucune personne détectée dans cette analyse`);
+        addLog(`⚠️ Aucune image n'a été analysée dans cette session`);
       }
 
       addLog(`\n🎉 RECONNAISSANCE TERMINÉE !`);
@@ -701,11 +693,11 @@ export default function FamilyAdmin() {
         {processedImages.length > 0 && (
           <div className="mt-6 bg-gradient-to-r from-green-900/30 to-emerald-900/30 border border-green-500/30 rounded-lg p-6">
             <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-              <span>✅</span>
-              Images avec détections ({processedImages.length})
+              <span>📸</span>
+              Images analysées dans cette reconnaissance ({processedImages.length})
             </h2>
             <p className="text-sm text-slate-300 mb-4">
-              Cliquez sur une image pour voir les personnes détectées et corriger si nécessaire.
+              Résultats de la dernière analyse. Cliquez sur une image pour voir les personnes détectées et corriger si nécessaire.
             </p>
 
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
