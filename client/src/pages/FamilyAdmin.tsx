@@ -588,11 +588,13 @@ export default function FamilyAdmin() {
                     <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
 
                     {/* People count badge */}
-                    {image.people && image.people.length > 0 && (
-                      <div className="absolute top-2 right-2 bg-purple-600/90 text-white rounded-full px-2 py-1 text-xs font-semibold">
-                        {image.people.length} 👤
-                      </div>
-                    )}
+                    <div className={`absolute top-2 right-2 rounded-full px-2 py-1 text-xs font-semibold ${
+                      image.people && image.people.length > 0
+                        ? 'bg-purple-600/90 text-white'
+                        : 'bg-slate-700/90 text-slate-300'
+                    }`}>
+                      {image.people ? image.people.length : 0} 👤
+                    </div>
 
                     {/* Title on hover */}
                     <div className="absolute bottom-0 left-0 right-0 p-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
