@@ -3,6 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import type { FamilyMember, TrainingImage, Image } from '../types';
 
+const getThumbnailUrl = (filename: string) => {
+  const baseName = filename.replace(/\.[^/.]+$/, '');
+  return `/uploads/thumbnails/thumb_${baseName}.webp`;
+};
+
 export default function FamilyAdmin() {
   const navigate = useNavigate();
   const [members, setMembers] = useState<FamilyMember[]>([]);
@@ -20,6 +25,13 @@ export default function FamilyAdmin() {
   const [recognitionProgress, setRecognitionProgress] = useState({ current: 0, total: 0 });
   const [recognitionLogs, setRecognitionLogs] = useState<string[]>([]);
   const [recognitionResults, setRecognitionResults] = useState<any>(null);
+  const [processedImages, setProcessedImages] = useState<Image[]>([]);
+
+  // Image modal state
+  const [selectedImage, setSelectedImage] = useState<Image | null>(null);
+  const [detectedPeople, setDetectedPeople] = useState<any[]>([]);
+  const [loadingPeople, setLoadingPeople] = useState(false);
+  const [selectedPersonToAdd, setSelectedPersonToAdd] = useState('');
 
   useEffect(() => {
     loadMembers();
@@ -30,6 +42,79 @@ export default function FamilyAdmin() {
       loadTrainingImages(selectedMember.id);
     }
   }, [selectedMember]);
+
+  useEffect(() => {
+    if (selectedImage) {
+      loadDetectedPeople(selectedImage.id);
+    } else {
+      setDetectedPeople([]);
+    }
+  }, [selectedImage]);
+
+  const loadDetectedPeople = async (imageId: string) => {
+    try {
+      setLoadingPeople(true);
+      const response = await api.get(`/family/images/${imageId}/people`);
+      setDetectedPeople(response.data);
+    } catch (error) {
+      console.error('Failed to load detected people:', error);
+      setDetectedPeople([]);
+    } finally {
+      setLoadingPeople(false);
+    }
+  };
+
+  const handleAddPerson = async () => {
+    if (!selectedImage || !selectedPersonToAdd) return;
+
+    try {
+      const response = await api.post(`/family/images/${selectedImage.id}/people`, {
+        family_member_id: selectedPersonToAdd
+      });
+
+      setDetectedPeople(prev => [...prev, response.data]);
+      setSelectedPersonToAdd('');
+
+      // Update the processedImages list if this image is in it
+      setProcessedImages(prev =>
+        prev.map(img =>
+          img.id === selectedImage.id
+            ? { ...img, people: [...(img.people || []), response.data] }
+            : img
+        )
+      );
+    } catch (error: any) {
+      console.error('Failed to add person:', error);
+      if (error.response?.status === 409) {
+        alert('Cette personne est déjà taguée sur cette image');
+      } else {
+        alert('Échec de l\'ajout de la personne');
+      }
+    }
+  };
+
+  const handleRemovePerson = async (personId: string) => {
+    if (!confirm('Retirer cette personne de l\'image ?')) return;
+
+    try {
+      await api.delete(`/family/people/${personId}`);
+      setDetectedPeople(prev => prev.filter(p => p.id !== personId));
+
+      // Update the processedImages list if this image is in it
+      if (selectedImage) {
+        setProcessedImages(prev =>
+          prev.map(img =>
+            img.id === selectedImage.id
+              ? { ...img, people: (img.people || []).filter(p => p.id !== personId) }
+              : img
+          )
+        );
+      }
+    } catch (error) {
+      console.error('Failed to remove person:', error);
+      alert('Échec de la suppression');
+    }
+  };
 
   const loadMembers = async () => {
     try {
@@ -177,8 +262,25 @@ export default function FamilyAdmin() {
 
       const summary = recognitionResponse.data.summary;
       const failedBatches = recognitionResponse.data.failed_batches || [];
+      const results = recognitionResponse.data.results || [];
       setRecognitionResults(summary);
       setRecognitionProgress({ current: summary.successful, total: imageIds.length });
+
+      // Enrich processed images with full image data and people
+      if (results.length > 0) {
+        addLog(`📥 Chargement des détails des images traitées...`);
+        const enrichedImages = await Promise.all(
+          results
+            .filter((r: any) => r.people && r.people.length > 0)
+            .map(async (r: any) => {
+              const imgResponse = await api.get(`/images/${r.image_id}`);
+              const img = imgResponse.data;
+              return { ...img, people: r.people };
+            })
+        );
+        setProcessedImages(enrichedImages);
+        addLog(`✅ ${enrichedImages.length} images avec détections chargées`);
+      }
 
       addLog(`\n🎉 RECONNAISSANCE TERMINÉE !`);
       addLog(`📸 Images analysées: ${summary.successful}/${summary.total_images}`);
@@ -569,6 +671,49 @@ export default function FamilyAdmin() {
           </div>
         </div>
 
+        {/* Processed Images Grid */}
+        {processedImages.length > 0 && (
+          <div className="mt-6 bg-gradient-to-r from-green-900/30 to-emerald-900/30 border border-green-500/30 rounded-lg p-6">
+            <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+              <span>✅</span>
+              Images avec détections ({processedImages.length})
+            </h2>
+            <p className="text-sm text-slate-300 mb-4">
+              Cliquez sur une image pour voir les personnes détectées et corriger si nécessaire.
+            </p>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+              {processedImages.map(image => (
+                <div
+                  key={image.id}
+                  className="group relative aspect-square overflow-hidden rounded-lg bg-gray-800 cursor-pointer"
+                  onClick={() => setSelectedImage(image)}
+                >
+                  <img
+                    src={getThumbnailUrl(image.filename)}
+                    alt={image.title || image.original_name}
+                    className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                    loading="lazy"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+
+                  {/* People count badge */}
+                  {image.people && image.people.length > 0 && (
+                    <div className="absolute top-2 right-2 bg-purple-600/90 text-white rounded-full px-2 py-1 text-xs font-semibold">
+                      {image.people.length} 👤
+                    </div>
+                  )}
+
+                  {/* Title on hover */}
+                  <div className="absolute bottom-0 left-0 right-0 p-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                    <p className="text-sm font-medium truncate">{image.title || image.original_name}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Info box */}
         <div className="mt-6 bg-blue-900/20 border border-blue-800 rounded-lg p-6">
           <h3 className="font-semibold mb-2">💡 Comment utiliser la reconnaissance familiale ?</h3>
@@ -581,6 +726,116 @@ export default function FamilyAdmin() {
           </ol>
         </div>
       </div>
+
+      {/* Image Detail Modal */}
+      {selectedImage && (
+        <div
+          className="fixed inset-0 z-50 bg-black/95 flex items-center justify-center p-4"
+          onClick={() => setSelectedImage(null)}
+        >
+          <div
+            className="bg-slate-900 border border-slate-700 rounded-lg max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-4 border-b border-slate-700">
+              <h3 className="text-lg font-semibold">{selectedImage.title || selectedImage.original_name}</h3>
+              <button
+                onClick={() => setSelectedImage(null)}
+                className="text-slate-400 hover:text-white text-2xl"
+              >
+                ×
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="flex-1 overflow-y-auto p-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Image */}
+                <div>
+                  <img
+                    src={`/uploads/optimized/${selectedImage.filename.replace(/\.[^/.]+$/, '')}.webp`}
+                    alt={selectedImage.title || selectedImage.original_name}
+                    className="w-full rounded-lg"
+                  />
+                </div>
+
+                {/* People Management */}
+                <div>
+                  <h4 className="text-md font-semibold mb-3 flex items-center gap-2">
+                    <span>👥</span>
+                    Personnes détectées
+                  </h4>
+
+                  {loadingPeople ? (
+                    <div className="flex items-center justify-center py-8">
+                      <div className="animate-spin rounded-full h-8 w-8 border-2 border-purple-500 border-t-transparent"></div>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Detected People List */}
+                      {detectedPeople.length > 0 ? (
+                        <div className="space-y-2 mb-6">
+                          {detectedPeople.map((person) => (
+                            <div
+                              key={person.id}
+                              className="flex items-center justify-between p-3 bg-purple-900/30 border border-purple-500/30 rounded-lg"
+                            >
+                              <div>
+                                <p className="font-medium">{person.member?.name || 'Inconnu'}</p>
+                                <p className="text-xs text-slate-400">
+                                  Confiance: {Math.round((person.confidence || 0) * 100)}%
+                                  {person.verified && ' • Vérifié'}
+                                </p>
+                              </div>
+                              <button
+                                onClick={() => handleRemovePerson(person.id)}
+                                className="text-red-400 hover:text-red-300 text-sm px-2 py-1"
+                              >
+                                Retirer
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-slate-400 text-sm mb-6">
+                          Aucune personne détectée sur cette image.
+                        </p>
+                      )}
+
+                      {/* Add Person */}
+                      <div className="border-t border-slate-700 pt-4">
+                        <h5 className="text-sm font-semibold mb-3">Ajouter une personne</h5>
+                        <div className="flex gap-2">
+                          <select
+                            value={selectedPersonToAdd}
+                            onChange={(e) => setSelectedPersonToAdd(e.target.value)}
+                            className="flex-1 px-3 py-2 bg-slate-800 border border-slate-700 rounded text-white text-sm"
+                          >
+                            <option value="">Sélectionner...</option>
+                            {members.map((member) => (
+                              <option key={member.id} value={member.id}>
+                                {member.name}
+                              </option>
+                            ))}
+                          </select>
+                          <button
+                            onClick={handleAddPerson}
+                            disabled={!selectedPersonToAdd}
+                            className="px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-slate-700 disabled:cursor-not-allowed rounded text-sm font-medium transition-colors"
+                          >
+                            Ajouter
+                          </button>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
