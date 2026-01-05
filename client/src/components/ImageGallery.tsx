@@ -250,7 +250,15 @@ export function ImageGallery({ themeId, themes, searchQuery, onImageUpdate }: Im
 
     try {
       await api.delete(`/family/people/${personId}`);
-      setDetectedPeople(prev => prev.filter(p => p.id !== personId));
+      const remainingPeople = detectedPeople.filter(p => p.id !== personId);
+      setDetectedPeople(remainingPeople);
+
+      // If no more people detected, reset family_analyzed flag so it can be re-analyzed
+      if (selectedImage && remainingPeople.length === 0) {
+        await api.post(`/images/${selectedImage.id}/mark-family-analyzed`, {}, {
+          params: { reset: true }
+        });
+      }
     } catch (error) {
       console.error('Failed to remove person:', error);
       alert('Échec de la suppression');
