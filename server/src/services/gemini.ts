@@ -507,8 +507,19 @@ IMPORTANT :
     }
 
     const parsed = JSON.parse(jsonMatch[0]);
-    const geminiTags = Array.isArray(parsed.tags) ? parsed.tags : [];
-    const geminiMoods = Array.isArray(parsed.moods) ? parsed.moods : [];
+
+    // Filter out self-referencing suggestions where canonical appears in similar list
+    const filterSelfReferences = (groups: Array<{ canonical: string; similar: string[]; reason: string }>) => {
+      return groups
+        .map(group => ({
+          ...group,
+          similar: group.similar.filter(item => item !== group.canonical)
+        }))
+        .filter(group => group.similar.length > 0);
+    };
+
+    const geminiTags = Array.isArray(parsed.tags) ? filterSelfReferences(parsed.tags) : [];
+    const geminiMoods = Array.isArray(parsed.moods) ? filterSelfReferences(parsed.moods) : [];
 
     console.log(`[Gemini] AI detected ${geminiTags.length} tag groups, ${geminiMoods.length} mood groups`);
 
