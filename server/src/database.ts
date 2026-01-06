@@ -855,9 +855,26 @@ export const imageDb = {
       try {
         const tags = JSON.parse(img.tags);
         if (Array.isArray(tags)) {
-          const newTags = tags.map(tag => tag === oldTag ? newTag : tag);
-          if (JSON.stringify(tags) !== JSON.stringify(newTags)) {
-            updateStmt.run(JSON.stringify(newTags), img.id);
+          // Replace oldTag with newTag
+          const replacedTags = tags.map(tag => tag === oldTag ? newTag : tag);
+
+          // Deduplicate while preserving order
+          const uniqueTags: string[] = [];
+          const seen = new Set<string>();
+
+          for (const tag of replacedTags) {
+            if (tag && typeof tag === 'string') {
+              const normalized = tag.trim();
+              if (normalized && !seen.has(normalized)) {
+                seen.add(normalized);
+                uniqueTags.push(normalized);
+              }
+            }
+          }
+
+          // Update only if something changed
+          if (JSON.stringify(tags) !== JSON.stringify(uniqueTags)) {
+            updateStmt.run(JSON.stringify(uniqueTags), img.id);
             updatedCount++;
           }
         }
