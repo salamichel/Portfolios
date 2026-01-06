@@ -57,8 +57,8 @@ const upload = multer({
 // Get all images with pagination
 router.get('/', (req, res) => {
   try {
-    const { theme_id, limit, offset, search, tag, mood, person } = req.query;
-    console.log(`[GET /images] Raw query params - theme:${theme_id}, search:"${search}", tag:"${tag}", mood:"${mood}", person:"${person}"`);
+    const { theme_id, limit, offset, search, tag, mood, person, sortBy, sortOrder } = req.query;
+    console.log(`[GET /images] Raw query params - theme:${theme_id}, search:"${search}", tag:"${tag}", mood:"${mood}", person:"${person}", sortBy:"${sortBy}", sortOrder:"${sortOrder}"`);
 
     // Filter out "undefined" strings (React sends these when state is undefined)
     const cleanString = (val: any): string | undefined => {
@@ -73,7 +73,9 @@ router.get('/', (req, res) => {
       search: cleanString(search),
       tag: cleanString(tag),
       mood: cleanString(mood),
-      person: cleanString(person)
+      person: cleanString(person),
+      sortBy: cleanString(sortBy),
+      sortOrder: cleanString(sortOrder)
     };
 
     console.log(`[GET /images] Cleaned filters -`, JSON.stringify(options));

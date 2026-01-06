@@ -597,7 +597,7 @@ export const themeDb = {
 
 // Image operations
 export const imageDb = {
-  getAll(options: { theme_id?: string; limit?: number; offset?: number; search?: string; tag?: string; mood?: string; person?: string } = {}): { images: Image[]; total: number } {
+  getAll(options: { theme_id?: string; limit?: number; offset?: number; search?: string; tag?: string; mood?: string; person?: string; sortBy?: string; sortOrder?: string } = {}): { images: Image[]; total: number } {
     let fromClause = 'images';
     let whereClause = '1=1';
     const params: any[] = [];
@@ -648,7 +648,17 @@ export const imageDb = {
     const limit = options.limit || 50;
     const offset = options.offset || 0;
 
-    const selectQuery = `SELECT DISTINCT images.* FROM ${fromClause} WHERE ${whereClause} ORDER BY images.created_at DESC LIMIT ? OFFSET ?`;
+    // Build ORDER BY clause
+    const sortBy = options.sortBy || 'created_at';
+    const sortOrder = options.sortOrder?.toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
+
+    // Validate sortBy to prevent SQL injection
+    const validSortFields = ['created_at', 'original_name', 'title'];
+    const sortField = validSortFields.includes(sortBy) ? sortBy : 'created_at';
+
+    const orderByClause = `ORDER BY images.${sortField} ${sortOrder}`;
+
+    const selectQuery = `SELECT DISTINCT images.* FROM ${fromClause} WHERE ${whereClause} ${orderByClause} LIMIT ? OFFSET ?`;
     console.log(`[imageDb.getAll] Select SQL: ${selectQuery}`);
 
     const images = db.prepare(selectQuery).all(...params, limit, offset) as Image[];
