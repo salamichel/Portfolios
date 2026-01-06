@@ -28,7 +28,7 @@ export const themesApi = {
 
 // Images API
 export const imagesApi = {
-  getAll: (params?: { theme_id?: string; limit?: number; offset?: number; search?: string; tag?: string; mood?: string; person?: string }) =>
+  getAll: (params?: { theme_id?: string; limit?: number; offset?: number; search?: string; tag?: string; mood?: string; person?: string; sortBy?: string; sortOrder?: string }) =>
     api.get<PaginatedImages>('/images', { params }).then(res => res.data),
 
   getById: (id: string) => api.get<Image>(`/images/${id}`).then(res => res.data),

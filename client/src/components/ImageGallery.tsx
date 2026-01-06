@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Loader2, Sparkles, Trash2, X, ChevronLeft, ChevronRight, Tag, Pencil, Save, XCircle, Info, Smile, BookOpen, Check, Users } from 'lucide-react';
+import { Loader2, Sparkles, Trash2, X, ChevronLeft, ChevronRight, Tag, Pencil, Save, XCircle, Info, Smile, BookOpen, Check, Users, ArrowUpDown, ArrowUp, ArrowDown, FolderOpen } from 'lucide-react';
 import { imagesApi, getMediumImageUrl, getThumbnailUrl, api } from '../api/client';
 import type { Image, Theme, TagWithCount, MoodWithCount, ImagePerson, FamilyMember } from '../types';
 import { CreateBookFromPhotoModal } from './book/CreateBookFromPhotoModal';
@@ -33,6 +33,9 @@ export function ImageGallery({ themeId, themes, searchQuery, onImageUpdate }: Im
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [selectedMood, setSelectedMood] = useState<string | null>(null);
   const [selectedPerson, setSelectedPerson] = useState<string | null>(null);
+  const [selectedTheme, setSelectedTheme] = useState<string | null>(null);
+  const [sortBy, setSortBy] = useState<'created_at' | 'original_name'>('created_at');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [availableTags, setAvailableTags] = useState<TagWithCount[]>([]);
   const [availableMoods, setAvailableMoods] = useState<MoodWithCount[]>([]);
   const [showCreateBookModal, setShowCreateBookModal] = useState(false);
@@ -56,33 +59,28 @@ export function ImageGallery({ themeId, themes, searchQuery, onImageUpdate }: Im
     try {
       const offset = reset ? 0 : images.length;
       const result = await imagesApi.getAll({
-        theme_id: themeId,
+        theme_id: selectedTheme || themeId || undefined,
         limit: PAGE_SIZE,
         offset,
         search: searchQuery,
         tag: selectedTag || undefined,
         mood: selectedMood || undefined,
-        person: selectedPerson || undefined
+        person: selectedPerson || undefined,
+        sortBy: sortBy,
+        sortOrder: sortOrder
       });
 
       console.log(`[loadImages] Received ${result.images.length} images (total: ${result.total})`);
 
-      // Sort images by original_name (filename) in ascending order
-      const sortedImages = result.images.sort((a, b) =>
-        a.original_name.localeCompare(b.original_name, 'fr', { sensitivity: 'base' })
-      );
-
       if (reset) {
-        setImages(sortedImages);
+        setImages(result.images);
       } else {
-        // When adding more images, merge and re-sort the entire list
-        const allImages = [...images, ...sortedImages];
+        // When adding more images, merge to avoid duplicates
+        const allImages = [...images, ...result.images];
         const uniqueImages = allImages.filter((img, index, self) =>
           index === self.findIndex(i => i.id === img.id)
         );
-        setImages(uniqueImages.sort((a, b) =>
-          a.original_name.localeCompare(b.original_name, 'fr', { sensitivity: 'base' })
-        ));
+        setImages(uniqueImages);
       }
       setTotal(result.total);
       setHasMore(offset + result.images.length < result.total);
@@ -91,7 +89,7 @@ export function ImageGallery({ themeId, themes, searchQuery, onImageUpdate }: Im
     } finally {
       setLoading(false);
     }
-  }, [themeId, searchQuery, selectedTag, selectedMood, selectedPerson, images.length, loading]);
+  }, [themeId, searchQuery, selectedTag, selectedMood, selectedPerson, selectedTheme, sortBy, sortOrder, images.length, loading]);
 
   // Load tags and moods with counts
   useEffect(() => {
@@ -126,7 +124,7 @@ export function ImageGallery({ themeId, themes, searchQuery, onImageUpdate }: Im
   // Initial load and filter changes
   useEffect(() => {
     loadImages(true);
-  }, [themeId, searchQuery, selectedTag, selectedMood, selectedPerson]);
+  }, [themeId, searchQuery, selectedTag, selectedMood, selectedPerson, selectedTheme, sortBy, sortOrder]);
 
   // Infinite scroll
   useEffect(() => {
@@ -453,6 +451,26 @@ export function ImageGallery({ themeId, themes, searchQuery, onImageUpdate }: Im
       {/* Advanced filters - always visible */}
       <div className="mb-4 p-4 bg-gray-800 rounded-lg space-y-3">
         <div className="flex flex-wrap gap-3">
+          {/* Theme filter */}
+          {!themeId && (
+            <div className="flex-1 min-w-[200px]">
+              <label className="block text-sm text-gray-400 mb-1">Thème</label>
+              <div className="relative">
+                <FolderOpen className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <select
+                  value={selectedTheme || ''}
+                  onChange={(e) => setSelectedTheme(e.target.value || null)}
+                  className="w-full bg-gray-900 border border-gray-700 rounded-lg pl-9 pr-4 py-2 text-white focus:outline-none focus:border-rose-500 appearance-none cursor-pointer"
+                >
+                  <option value="">Tous les thèmes</option>
+                  {themes.map((theme) => (
+                    <option key={theme.id} value={theme.id}>{theme.name}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          )}
+
           {/* Tag filter */}
           <div className="flex-1 min-w-[200px]">
             <label className="block text-sm text-gray-400 mb-1">Tag</label>
@@ -511,10 +529,57 @@ export function ImageGallery({ themeId, themes, searchQuery, onImageUpdate }: Im
           )}
         </div>
 
+        {/* Sorting controls */}
+        <div className="flex flex-wrap gap-3 pt-3 border-t border-gray-700">
+          <div className="flex-1 min-w-[200px]">
+            <label className="block text-sm text-gray-400 mb-1">Trier par</label>
+            <div className="relative">
+              <ArrowUpDown className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as 'created_at' | 'original_name')}
+                className="w-full bg-gray-900 border border-gray-700 rounded-lg pl-9 pr-4 py-2 text-white focus:outline-none focus:border-rose-500 appearance-none cursor-pointer"
+              >
+                <option value="created_at">Date d'ajout</option>
+                <option value="original_name">Nom de fichier</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="flex-1 min-w-[200px]">
+            <label className="block text-sm text-gray-400 mb-1">Ordre</label>
+            <div className="relative">
+              {sortOrder === 'asc' ? (
+                <ArrowUp className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              ) : (
+                <ArrowDown className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              )}
+              <select
+                value={sortOrder}
+                onChange={(e) => setSortOrder(e.target.value as 'asc' | 'desc')}
+                className="w-full bg-gray-900 border border-gray-700 rounded-lg pl-9 pr-4 py-2 text-white focus:outline-none focus:border-rose-500 appearance-none cursor-pointer"
+              >
+                <option value="asc">Croissant (A→Z, ancien→récent)</option>
+                <option value="desc">Décroissant (Z→A, récent→ancien)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
         {/* Active filters */}
-        {(selectedTag || selectedMood || selectedPerson) && (
+        {(selectedTheme || selectedTag || selectedMood || selectedPerson) && (
           <div className="flex flex-wrap gap-2 items-center pt-2 border-t border-gray-700">
             <span className="text-sm text-gray-400">Actifs:</span>
+            {selectedTheme && (
+              <button
+                onClick={() => setSelectedTheme(null)}
+                className="flex items-center gap-1 px-2 py-1 bg-green-500/20 text-green-400 rounded text-sm hover:bg-green-500/30"
+              >
+                <FolderOpen className="w-3 h-3" />
+                {themes.find(t => t.id === selectedTheme)?.name || 'Thème'}
+                <X className="w-3 h-3" />
+              </button>
+            )}
             {selectedTag && (
               <button
                 onClick={() => setSelectedTag(null)}
