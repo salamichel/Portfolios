@@ -5,7 +5,7 @@ import {
   LayoutGrid, BookOpen, Presentation, Type, Settings, Loader2, Activity
 } from 'lucide-react';
 import { booksApi, templatesApi, themesApi } from '../api/client';
-import type { Book, BookPage, PageTemplate, Theme, LayoutSuggestion, Image, SlotAnnotation, TextSlotData } from '../types';
+import type { Book, BookPage, PageTemplate, Theme, LayoutSuggestion, Image, SlotAnnotation, TextSlotData, PageSlotData } from '../types';
 import { DoublePageSpread } from '../components/book/DoublePageSpread';
 import { ImageSelector } from '../components/book/ImageSelector';
 import { TemplateSelector } from '../components/book/TemplateSelector';
@@ -144,9 +144,62 @@ export function BookEditor() {
     if (!id || !currentPage || isLocked) return;
     try {
       setSaving(true);
+
+      // Get the new template to understand its slots
+      const newTemplate = templates.find(t => t.id === templateId);
+      if (!newTemplate) {
+        console.error('Template not found:', templateId);
+        return;
+      }
+
+      // Get existing image slots and text slots
+      const existingImageSlots = currentPage.page_data?.slots || [];
+      const existingTextSlots = currentPage.page_data?.textSlots || [];
+
+      // Get image-type slots from new template, sorted by position (left to right, top to bottom)
+      const newImageSlots = newTemplate.layout.slots
+        .filter(slot => slot.type === 'image')
+        .sort((a, b) => {
+          // Sort by page first
+          if (a.page !== b.page) return a.page === 'left' ? -1 : 1;
+          // Then by y position
+          if (a.y !== b.y) return a.y - b.y;
+          // Then by x position
+          return a.x - b.x;
+        });
+
+      // Get text-type slot IDs from new template
+      const newTextSlotIds = new Set(
+        newTemplate.layout.slots
+          .filter(slot => slot.type === 'text')
+          .map(slot => slot.id)
+      );
+
+      // Map existing images to new slots (in order)
+      const newSlots: PageSlotData[] = [];
+      existingImageSlots.forEach((oldSlot, index) => {
+        if (index < newImageSlots.length) {
+          // Map to new slot, preserving image and annotation
+          newSlots.push({
+            slot_id: newImageSlots[index].id,
+            image_id: oldSlot.image_id,
+            ...(oldSlot.annotation && { annotation: oldSlot.annotation })
+          });
+        }
+        // If more images than slots, they will be lost (unavoidable)
+      });
+
+      // Preserve text slots only if their slot_id exists in new template
+      const newTextSlots = existingTextSlots.filter(textSlot =>
+        newTextSlotIds.has(textSlot.slot_id)
+      );
+
       const updated = await booksApi.updatePage(id, currentPage.id, {
         template_id: templateId,
-        page_data: { slots: [] } // Reset slots when changing template
+        page_data: {
+          slots: newSlots,
+          textSlots: newTextSlots
+        }
       });
       setPages(pages.map(p => p.id === currentPage.id ? updated : p));
       setShowTemplateSelector(false);
