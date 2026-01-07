@@ -959,14 +959,13 @@ function convertSuggestionToPageData(
 
   // Build text zones with suggested content from AI or fallback
   const textZones: TextZoneInfo[] = textSlots.map(slot => {
-    let aiContent = suggestion.text_content?.[slot.id];
+    const aiContent = suggestion.text_content?.[slot.id];
     const analysis = analyzeTemplate(template);
     const slotDesc = analysis.textSlotDescriptions.find(d => d.slot_id === slot.id);
 
-    // Apply rich text formatting to AI-generated content
-    if (aiContent) {
-      aiContent = enrichTextWithFormatting(aiContent, slot.id, context);
-    }
+    // NOTE: Do NOT apply enrichTextWithFormatting to AI content!
+    // The AI already generates markdown-formatted content according to prompt instructions.
+    // Applying enrichTextWithFormatting would cause double formatting (e.g., "# **# **Title**").
 
     return {
       slot_id: slot.id,
