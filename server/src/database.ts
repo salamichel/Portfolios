@@ -245,6 +245,30 @@ try {
   // Column already exists, ignore error
 }
 
+// Migration: Add no_people_marked flag to images table
+try {
+  db.exec(`ALTER TABLE images ADD COLUMN no_people_marked BOOLEAN DEFAULT FALSE`);
+} catch {
+  // Column already exists, ignore error
+}
+
+// Migration: Mark images with detected people as family_analyzed
+try {
+  const imageIds = db.prepare(`
+    SELECT DISTINCT image_id FROM image_people
+  `).all() as Array<{ image_id: string }>;
+
+  if (imageIds.length > 0) {
+    const stmt = db.prepare(`UPDATE images SET family_analyzed = TRUE WHERE id = ?`);
+    for (const { image_id } of imageIds) {
+      stmt.run(image_id);
+    }
+    console.log(`[Migration] Marked ${imageIds.length} existing images as family_analyzed`);
+  }
+} catch (error) {
+  console.error('[Migration] Failed to mark existing images as analyzed:', error);
+}
+
 // Migration: Add status column to books if it doesn't exist
 try {
   db.exec(`ALTER TABLE books ADD COLUMN status TEXT DEFAULT 'draft'`);
@@ -310,6 +334,7 @@ export interface Image {
   ai_enriched: boolean;
   enrichment_config_id: string | null;
   family_analyzed: boolean;
+  no_people_marked: boolean;
   width: number | null;
   height: number | null;
   size: number;
