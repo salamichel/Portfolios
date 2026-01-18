@@ -248,6 +248,7 @@ router.post('/upload', upload.array('images', 50), async (req, res) => {
         ai_enriched: enrichment.ai_enriched,
         enrichment_config_id: enrichment.enrichment_config_id,
         family_analyzed: false,
+        no_people_marked: false,
         width: metadata.width || null,
         height: metadata.height || null,
         size: file.size,
