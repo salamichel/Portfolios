@@ -263,6 +263,39 @@ export function ImageGallery({ themeId, themes, searchQuery, onImageUpdate }: Im
     }
   };
 
+  const handleMarkNoPeople = async () => {
+    if (!selectedImage) return;
+    if (!confirm('Marquer cette image comme n\'ayant pas de personne ? Elle ne sera plus analysée.')) return;
+
+    try {
+      await api.post(`/images/${selectedImage.id}/mark-no-people`);
+      if (selectedImage) {
+        setSelectedImage({ ...selectedImage, no_people_marked: true });
+      }
+      setDetectedPeople([]);
+      alert('Image marquée comme sans personne');
+    } catch (error) {
+      console.error('Failed to mark as no people:', error);
+      alert('Échec du marquage');
+    }
+  };
+
+  const handleUnmarkNoPeople = async () => {
+    if (!selectedImage) return;
+    if (!confirm('Retirer le marquage "sans personne" ? L\'image sera ré-analysée lors de la prochaine reconnaissance.')) return;
+
+    try {
+      await api.post(`/images/${selectedImage.id}/unmark-no-people`);
+      if (selectedImage) {
+        setSelectedImage({ ...selectedImage, no_people_marked: false });
+      }
+      alert('Marquage retiré');
+    } catch (error) {
+      console.error('Failed to unmark as no people:', error);
+      alert('Échec du retrait du marquage');
+    }
+  };
+
   const handleDelete = async (image: Image) => {
     if (!confirm('Supprimer cette image ?')) return;
 
@@ -917,7 +950,7 @@ export function ImageGallery({ themeId, themes, searchQuery, onImageUpdate }: Im
 
                         {/* Add person dropdown */}
                         {familyMembers.length > 0 && (
-                          <div className="flex gap-2">
+                          <div className="flex gap-2 mb-2">
                             <select
                               value={selectedPersonToAdd}
                               onChange={(e) => setSelectedPersonToAdd(e.target.value)}
@@ -940,6 +973,29 @@ export function ImageGallery({ themeId, themes, searchQuery, onImageUpdate }: Im
                             >
                               {addingPerson ? '...' : 'OK'}
                             </button>
+                          </div>
+                        )}
+
+                        {/* Mark as no people button */}
+                        {familyMembers.length > 0 && (
+                          <div className="flex gap-2">
+                            {!selectedImage?.no_people_marked ? (
+                              <button
+                                onClick={handleMarkNoPeople}
+                                className="flex-1 px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-sm transition-colors text-gray-200"
+                                title="Marquer cette image comme n'ayant aucune personne"
+                              >
+                                ✗ Pas de personne
+                              </button>
+                            ) : (
+                              <button
+                                onClick={handleUnmarkNoPeople}
+                                className="flex-1 px-3 py-1 bg-amber-700 hover:bg-amber-600 rounded text-sm transition-colors text-amber-100"
+                                title="Retirer le marquage pour ré-analyser"
+                              >
+                                ↻ Ré-analyser
+                              </button>
+                            )}
                           </div>
                         )}
                       </>
@@ -1251,7 +1307,7 @@ export function ImageGallery({ themeId, themes, searchQuery, onImageUpdate }: Im
 
                         {/* Add person dropdown */}
                         {familyMembers.length > 0 && (
-                          <div className="flex gap-2">
+                          <div className="flex gap-2 mb-2">
                             <select
                               value={selectedPersonToAdd}
                               onChange={(e) => setSelectedPersonToAdd(e.target.value)}
@@ -1274,6 +1330,29 @@ export function ImageGallery({ themeId, themes, searchQuery, onImageUpdate }: Im
                             >
                               {addingPerson ? '...' : 'OK'}
                             </button>
+                          </div>
+                        )}
+
+                        {/* Mark as no people button */}
+                        {familyMembers.length > 0 && (
+                          <div className="flex gap-2">
+                            {!selectedImage?.no_people_marked ? (
+                              <button
+                                onClick={handleMarkNoPeople}
+                                className="flex-1 px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-sm transition-colors text-gray-200"
+                                title="Marquer cette image comme n'ayant aucune personne"
+                              >
+                                ✗ Pas de personne
+                              </button>
+                            ) : (
+                              <button
+                                onClick={handleUnmarkNoPeople}
+                                className="flex-1 px-3 py-1 bg-amber-700 hover:bg-amber-600 rounded text-sm transition-colors text-amber-100"
+                                title="Retirer le marquage pour ré-analyser"
+                              >
+                                ↻ Ré-analyser
+                              </button>
+                            )}
                           </div>
                         )}
                       </>

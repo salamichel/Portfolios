@@ -586,4 +586,44 @@ router.post('/:id/mark-family-analyzed', (req, res) => {
   }
 });
 
+// Mark image as explicitly having no people (skip AI recognition)
+router.post('/:id/mark-no-people', (req, res) => {
+  try {
+    const image = imageDb.getById(req.params.id);
+    if (!image) {
+      return res.status(404).json({ error: 'Image not found' });
+    }
+
+    // Mark as no people and analyzed (so it won't be re-analyzed)
+    const updated = imageDb.update(req.params.id, {
+      no_people_marked: true,
+      family_analyzed: true
+    });
+    res.json(updated);
+  } catch (error) {
+    console.error('Failed to mark image as no people:', error);
+    res.status(500).json({ error: 'Failed to mark image as no people' });
+  }
+});
+
+// Unmark image as "no people" to allow re-analysis
+router.post('/:id/unmark-no-people', (req, res) => {
+  try {
+    const image = imageDb.getById(req.params.id);
+    if (!image) {
+      return res.status(404).json({ error: 'Image not found' });
+    }
+
+    // Unmark as no people and reset analyzed flag for re-analysis
+    const updated = imageDb.update(req.params.id, {
+      no_people_marked: false,
+      family_analyzed: false
+    });
+    res.json(updated);
+  } catch (error) {
+    console.error('Failed to unmark image as no people:', error);
+    res.status(500).json({ error: 'Failed to unmark image as no people' });
+  }
+});
+
 export default router;

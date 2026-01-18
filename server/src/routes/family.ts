@@ -479,15 +479,19 @@ router.post('/batch-recognize', async (req, res) => {
 
       // Skip images already analyzed if mode is 'new_only'
       if (mode === 'new_only') {
-        // Skip if already marked as analyzed OR if it has detected people
-        if (image.family_analyzed) {
+        // Skip if user explicitly marked as "no people"
+        if (image.no_people_marked) {
           skipped.push(imageId);
           continue;
         }
-        const existingPeople = imagePeopleDb.getByImageId(imageId);
-        if (existingPeople.length > 0) {
-          skipped.push(imageId);
-          continue;
+        // Skip if already analyzed and AI found no people (don't re-attempt)
+        if (image.family_analyzed) {
+          const existingPeople = imagePeopleDb.getByImageId(imageId);
+          if (existingPeople.length === 0) {
+            skipped.push(imageId);
+            continue;
+          }
+          // If image has detected people but user deleted them all, allow re-analysis
         }
       }
 
