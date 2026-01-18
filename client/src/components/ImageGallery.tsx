@@ -44,7 +44,6 @@ export function ImageGallery({ themeId, themes, searchQuery, onImageUpdate }: Im
   const [detectedPeople, setDetectedPeople] = useState<ImagePerson[]>([]);
   const [loadingPeople, setLoadingPeople] = useState(false);
   const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
-  const [selectedPersonToAdd, setSelectedPersonToAdd] = useState<string>('');
   const [addingPerson, setAddingPerson] = useState(false);
   const observerRef = useRef<IntersectionObserver | null>(null);
   const loadMoreRef = useRef<HTMLDivElement>(null);
@@ -220,17 +219,16 @@ export function ImageGallery({ themeId, themes, searchQuery, onImageUpdate }: Im
     }
   };
 
-  const handleAddPerson = async () => {
-    if (!selectedImage || !selectedPersonToAdd) return;
+  const handleAddPerson = async (memberId: string) => {
+    if (!selectedImage || !memberId) return;
 
     setAddingPerson(true);
     try {
       const response = await api.post(`/family/images/${selectedImage.id}/people`, {
-        family_member_id: selectedPersonToAdd
+        family_member_id: memberId
       });
 
       setDetectedPeople(prev => [...prev, response.data]);
-      setSelectedPersonToAdd('');
     } catch (error: any) {
       console.error('Failed to add person:', error);
       if (error.response?.status === 409) {
@@ -948,31 +946,21 @@ export function ImageGallery({ themeId, themes, searchQuery, onImageUpdate }: Im
                           ))}
                         </div>
 
-                        {/* Add person dropdown */}
+                        {/* Add person buttons */}
                         {familyMembers.length > 0 && (
-                          <div className="flex gap-2 mb-2">
-                            <select
-                              value={selectedPersonToAdd}
-                              onChange={(e) => setSelectedPersonToAdd(e.target.value)}
-                              className="flex-1 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm"
-                              disabled={addingPerson}
-                            >
-                              <option value="">+ Ajouter une personne</option>
-                              {familyMembers
-                                .filter(member => !detectedPeople.some(p => p.family_member_id === member.id))
-                                .map(member => (
-                                  <option key={member.id} value={member.id}>
-                                    {member.name}
-                                  </option>
-                                ))}
-                            </select>
-                            <button
-                              onClick={handleAddPerson}
-                              disabled={!selectedPersonToAdd || addingPerson}
-                              className="px-3 py-1 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-700 disabled:cursor-not-allowed rounded text-sm transition-colors"
-                            >
-                              {addingPerson ? '...' : 'OK'}
-                            </button>
+                          <div className="flex flex-wrap gap-2 mb-2">
+                            {familyMembers
+                              .filter(member => !detectedPeople.some(p => p.family_member_id === member.id))
+                              .map(member => (
+                                <button
+                                  key={member.id}
+                                  onClick={() => handleAddPerson(member.id)}
+                                  disabled={addingPerson}
+                                  className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-700 disabled:cursor-not-allowed rounded text-sm transition-colors font-medium"
+                                >
+                                  + {member.name}
+                                </button>
+                              ))}
                           </div>
                         )}
 
@@ -1305,31 +1293,21 @@ export function ImageGallery({ themeId, themes, searchQuery, onImageUpdate }: Im
                           ))}
                         </div>
 
-                        {/* Add person dropdown */}
+                        {/* Add person buttons */}
                         {familyMembers.length > 0 && (
-                          <div className="flex gap-2 mb-2">
-                            <select
-                              value={selectedPersonToAdd}
-                              onChange={(e) => setSelectedPersonToAdd(e.target.value)}
-                              className="flex-1 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm"
-                              disabled={addingPerson}
-                            >
-                              <option value="">+ Ajouter une personne</option>
-                              {familyMembers
-                                .filter(member => !detectedPeople.some(p => p.family_member_id === member.id))
-                                .map(member => (
-                                  <option key={member.id} value={member.id}>
-                                    {member.name}
-                                  </option>
-                                ))}
-                            </select>
-                            <button
-                              onClick={handleAddPerson}
-                              disabled={!selectedPersonToAdd || addingPerson}
-                              className="px-3 py-1 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-700 disabled:cursor-not-allowed rounded text-sm transition-colors"
-                            >
-                              {addingPerson ? '...' : 'OK'}
-                            </button>
+                          <div className="flex flex-wrap gap-2 mb-2">
+                            {familyMembers
+                              .filter(member => !detectedPeople.some(p => p.family_member_id === member.id))
+                              .map(member => (
+                                <button
+                                  key={member.id}
+                                  onClick={() => handleAddPerson(member.id)}
+                                  disabled={addingPerson}
+                                  className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-700 disabled:cursor-not-allowed rounded text-sm transition-colors font-medium"
+                                >
+                                  + {member.name}
+                                </button>
+                              ))}
                           </div>
                         )}
 

@@ -31,7 +31,6 @@ export default function FamilyAdmin() {
   const [selectedImage, setSelectedImage] = useState<Image | null>(null);
   const [detectedPeople, setDetectedPeople] = useState<any[]>([]);
   const [loadingPeople, setLoadingPeople] = useState(false);
-  const [selectedPersonToAdd, setSelectedPersonToAdd] = useState('');
 
   useEffect(() => {
     loadMembers();
@@ -64,16 +63,15 @@ export default function FamilyAdmin() {
     }
   };
 
-  const handleAddPerson = async () => {
-    if (!selectedImage || !selectedPersonToAdd) return;
+  const handleAddPerson = async (memberId: string) => {
+    if (!selectedImage || !memberId) return;
 
     try {
       const response = await api.post(`/family/images/${selectedImage.id}/people`, {
-        family_member_id: selectedPersonToAdd
+        family_member_id: memberId
       });
 
       setDetectedPeople(prev => [...prev, response.data]);
-      setSelectedPersonToAdd('');
 
       // Update the processedImages list if this image is in it
       setProcessedImages(prev =>
@@ -873,26 +871,18 @@ export default function FamilyAdmin() {
                       {/* Add Person */}
                       <div className="border-t border-slate-700 pt-4">
                         <h5 className="text-sm font-semibold mb-3">Ajouter une personne</h5>
-                        <div className="flex gap-2">
-                          <select
-                            value={selectedPersonToAdd}
-                            onChange={(e) => setSelectedPersonToAdd(e.target.value)}
-                            className="flex-1 px-3 py-2 bg-slate-800 border border-slate-700 rounded text-white text-sm"
-                          >
-                            <option value="">Sélectionner...</option>
-                            {members.map((member) => (
-                              <option key={member.id} value={member.id}>
-                                {member.name}
-                              </option>
+                        <div className="flex flex-wrap gap-2">
+                          {members
+                            .filter(member => !detectedPeople.some(p => p.family_member_id === member.id))
+                            .map((member) => (
+                              <button
+                                key={member.id}
+                                onClick={() => handleAddPerson(member.id)}
+                                className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 rounded text-sm font-medium transition-colors"
+                              >
+                                + {member.name}
+                              </button>
                             ))}
-                          </select>
-                          <button
-                            onClick={handleAddPerson}
-                            disabled={!selectedPersonToAdd}
-                            className="px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-slate-700 disabled:cursor-not-allowed rounded text-sm font-medium transition-colors"
-                          >
-                            Ajouter
-                          </button>
                         </div>
 
                         {/* Mark as No Person */}
