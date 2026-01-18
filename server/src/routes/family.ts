@@ -484,14 +484,14 @@ router.post('/batch-recognize', async (req, res) => {
           skipped.push(imageId);
           continue;
         }
-        // Skip if already analyzed and AI found no people (don't re-attempt)
+        // Skip if already analyzed AND has people detected (no need to re-analyze success)
         if (image.family_analyzed) {
           const existingPeople = imagePeopleDb.getByImageId(imageId);
-          if (existingPeople.length === 0) {
+          if (existingPeople.length > 0) {
             skipped.push(imageId);
             continue;
           }
-          // If image has detected people but user deleted them all, allow re-analysis
+          // If analyzed but NO people found, ALLOW re-attempt in new_only mode
         }
       }
 
