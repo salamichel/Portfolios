@@ -22,6 +22,7 @@ export interface Image {
   ai_enriched: boolean;
   enrichment_config_id: string | null;
   family_analyzed: boolean;
+  no_people_marked: boolean;
   width: number | null;
   height: number | null;
   size: number;
