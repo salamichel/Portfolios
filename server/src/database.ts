@@ -731,6 +731,7 @@ export const imageDb = {
     if (data.ai_enriched !== undefined) { fields.push('ai_enriched = ?'); values.push(data.ai_enriched ? 1 : 0); }
     if (data.enrichment_config_id !== undefined) { fields.push('enrichment_config_id = ?'); values.push(data.enrichment_config_id); }
     if (data.family_analyzed !== undefined) { fields.push('family_analyzed = ?'); values.push(data.family_analyzed ? 1 : 0); }
+    if (data.no_people_marked !== undefined) { fields.push('no_people_marked = ?'); values.push(data.no_people_marked ? 1 : 0); }
 
     if (fields.length === 0) return this.getById(id);
 
