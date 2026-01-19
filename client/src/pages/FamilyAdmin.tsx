@@ -295,7 +295,9 @@ export default function FamilyAdmin() {
       const failedBatches = recognitionResponse.data.failed_batches || [];
       const results = recognitionResponse.data.results || [];
       setRecognitionResults(summary);
-      setRecognitionProgress({ current: summary.successful, total: imageIds.length });
+      // Progress should reflect total processed (successful + skipped), not just successful
+      const totalProcessed = summary.successful + summary.skipped;
+      setRecognitionProgress({ current: totalProcessed, total: imageIds.length });
 
       console.log('[FamilyAdmin] Recognition results:', results.length, 'results');
 
