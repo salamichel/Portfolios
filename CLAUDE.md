@@ -98,9 +98,13 @@ Portfolios/
 7. Documentation complète dans `FAMILLE_RECONNAISSANCE.md`
 
 ### Nettoyer et optimiser les métadonnées
-1. `server/src/routes/cleanup.ts` - Analyse images similaires, suggestions merge tags/moods
-2. `client/src/pages/CleanupAdmin.tsx` - UI cleanup avec analyse IA (363 lignes)
-3. Accès via `/admin/cleanup`
+1. `server/src/routes/cleanup.ts` - Analyse et nettoyage (tags/moods similaires, doublons, orphelins)
+2. `client/src/pages/CleanupAdmin.tsx` - UI cleanup complète (646 lignes)
+3. Accès via `/admin/cleanup` ou icône 🧹 dans le header
+4. **Fonctionnalités**:
+   - **Tags/Moods similaires**: Détection IA et fusion de métadonnées similaires
+   - **Images orphelines**: Détection et suppression d'entrées DB sans fichiers physiques
+   - **Images dupliquées**: Détection par hash SHA256 et suppression sélective avec conservation de l'original
 
 ### Gérer les rapports de traitement IA
 1. `server/src/services/processingReportService.ts` - Tracking appels IA pour livres
@@ -236,9 +240,9 @@ npm run regenerate-thumbnails:prod  # Régénère thumbnails 1600px (prod)
 | `gemini.ts` | 928 | Client Gemini AI (analyze, batch, similarity, recognition) |
 | `images.ts` (routes) | 630 | Upload, métadonnées, enrichissement, filtres avancés |
 | `family.ts` (routes) | 611 | CRUD famille + reconnaissance + training images |
+| `CleanupAdmin.tsx` | 646 | Interface cleanup complète (tags/moods, doublons, orphelins) |
 | `ProcessingReportModal.tsx` | 410 | Affichage détails rapports traitement IA |
 | `EnrichmentConfigAdmin.tsx` | 362 | Page admin configuration IA (prompts, modèles) |
-| `CleanupAdmin.tsx` | 363 | Interface cleanup tags/moods avec analyse IA |
 
 ## Pages d'administration
 
@@ -251,7 +255,7 @@ Toutes accessibles depuis le header avec icônes:
 | BookEditor | `/admin/books/:id` | ✏️ | Éditeur complet de livres (871 lignes) |
 | EnrichmentConfigAdmin | `/admin/enrichment` | 🖥️ CPU | Configuration IA enrichissement (362 lignes) |
 | FamilyAdmin | `/admin/family` | 👥 | Reconnaissance familiale (911 lignes) |
-| CleanupAdmin | `/admin/cleanup` | 🧹 | Nettoyage tags/moods, analyse similarité (363 lignes) |
+| CleanupAdmin | `/admin/cleanup` | 🧹 | Nettoyage complet: tags/moods, doublons, orphelins (646 lignes) |
 | TemplateEditor | `/admin/templates` | 📄 | Création templates personnalisés (445 lignes) |
 
 ## Notes de développement
