@@ -267,7 +267,7 @@ router.get('/duplicates/analyze', async (req, res) => {
           id: image.id,
           filename: image.filename,
           title: image.title,
-          upload_date: image.upload_date,
+          upload_date: image.created_at,
           theme_id: image.theme_id,
           tags: image.tags ? JSON.parse(image.tags) : [],
           mood: image.mood,
