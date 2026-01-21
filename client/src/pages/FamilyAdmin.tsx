@@ -130,7 +130,7 @@ export default function FamilyAdmin() {
     }
 
     try {
-      await api.post(`/images/${selectedImage.id}/mark-family-analyzed`);
+      await api.post(`/images/${selectedImage.id}/mark-no-people`);
 
       // Remove all detected people for this image
       const peopleIds = detectedPeople.map(p => p.id);
