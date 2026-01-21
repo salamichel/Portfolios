@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { cleanupApi, type SimilarityGroup, type CleanupAnalysisResponse } from '../api/client';
-import { ArrowLeft, Sparkles, CheckCircle, XCircle, Loader, RefreshCw, Tag, Heart } from 'lucide-react';
+import { cleanupApi, orphansApi, type SimilarityGroup, type CleanupAnalysisResponse, type OrphanAnalysisResponse } from '../api/client';
+import { ArrowLeft, Sparkles, CheckCircle, XCircle, Loader, RefreshCw, Tag, Heart, AlertTriangle, Trash2 } from 'lucide-react';
 
 export function CleanupAdmin() {
   const [analysis, setAnalysis] = useState<CleanupAnalysisResponse | null>(null);
@@ -10,6 +10,11 @@ export function CleanupAdmin() {
   const [selectedTagGroups, setSelectedTagGroups] = useState<Set<number>>(new Set());
   const [selectedMoodGroups, setSelectedMoodGroups] = useState<Set<number>>(new Set());
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Orphans state
+  const [orphanAnalysis, setOrphanAnalysis] = useState<OrphanAnalysisResponse | null>(null);
+  const [orphanLoading, setOrphanLoading] = useState(false);
+  const [orphanCleaning, setOrphanCleaning] = useState(false);
 
   const analyzeMetadata = async () => {
     try {
@@ -77,6 +82,61 @@ export function CleanupAdmin() {
       setMessage({ type: 'error', text: 'Erreur lors de l\'application des fusions.' });
     } finally {
       setApplying(false);
+    }
+  };
+
+  // Orphan functions
+  const analyzeOrphans = async () => {
+    try {
+      setOrphanLoading(true);
+      setMessage(null);
+      const result = await orphansApi.analyze();
+      setOrphanAnalysis(result);
+
+      if (result.orphans.length > 0) {
+        setMessage({
+          type: 'error',
+          text: `${result.orphans.length} image(s) orpheline(s) détectée(s) en base de données (${result.stats.percentageOrphaned}% du total)`
+        });
+      } else {
+        setMessage({
+          type: 'success',
+          text: 'Aucune image orpheline détectée. Toutes les entrées en base de données correspondent à des fichiers existants.'
+        });
+      }
+    } catch (error) {
+      console.error('Orphan analysis failed:', error);
+      setMessage({ type: 'error', text: "Erreur lors de l'analyse des images orphelines." });
+    } finally {
+      setOrphanLoading(false);
+    }
+  };
+
+  const cleanupOrphans = async () => {
+    if (!orphanAnalysis || orphanAnalysis.orphans.length === 0) return;
+
+    if (!confirm(`Êtes-vous sûr de vouloir supprimer ${orphanAnalysis.orphans.length} image(s) orpheline(s) de la base de données ?\n\nCette action est irréversible.`)) {
+      return;
+    }
+
+    try {
+      setOrphanCleaning(true);
+      setMessage(null);
+
+      const result = await orphansApi.cleanup();
+
+      setMessage({
+        type: 'success',
+        text: result.message
+      });
+
+      // Clear analysis
+      setOrphanAnalysis(null);
+    } catch (error) {
+      console.error('Orphan cleanup failed:', error);
+      setMessage({ type: 'error', text: 'Erreur lors de la suppression des images orphelines.' });
+    } finally {
+      setOrphanCleaning(false);
     }
   };
 
@@ -202,6 +262,116 @@ export function CleanupAdmin() {
             {message.text}
           </div>
         )}
+
+        {/* Orphaned Images Section */}
+        <div className="bg-gray-800 rounded-lg border border-gray-700 p-6 mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                <AlertTriangle className="w-6 h-6 text-orange-400" />
+                Images Orphelines
+              </h2>
+              <p className="text-gray-400 text-sm mt-1">
+                Détecte et supprime les entrées en base de données sans fichiers physiques
+              </p>
+            </div>
+
+            <button
+              onClick={analyzeOrphans}
+              disabled={orphanLoading}
+              className="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 disabled:bg-gray-700 disabled:text-gray-500 flex items-center gap-2 transition-colors"
+            >
+              {orphanLoading ? (
+                <>
+                  <Loader className="w-5 h-5 animate-spin" />
+                  Analyse...
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="w-5 h-5" />
+                  Analyser
+                </>
+              )}
+            </button>
+          </div>
+
+          {orphanAnalysis && (
+            <>
+              {/* Stats */}
+              <div className="grid grid-cols-3 gap-4 mb-4">
+                <div className="bg-gray-900 p-4 rounded-lg border border-gray-700">
+                  <div className="text-2xl font-bold text-white">{orphanAnalysis.stats.totalImages}</div>
+                  <div className="text-sm text-gray-400">Images Total</div>
+                </div>
+                <div className="bg-gray-900 p-4 rounded-lg border border-gray-700">
+                  <div className="text-2xl font-bold text-orange-400">{orphanAnalysis.stats.orphanedImages}</div>
+                  <div className="text-sm text-gray-400">Orphelines</div>
+                </div>
+                <div className="bg-gray-900 p-4 rounded-lg border border-gray-700">
+                  <div className="text-2xl font-bold text-orange-400">{orphanAnalysis.stats.percentageOrphaned}%</div>
+                  <div className="text-sm text-gray-400">Pourcentage</div>
+                </div>
+              </div>
+
+              {/* Orphans list */}
+              {orphanAnalysis.orphans.length > 0 && (
+                <div className="space-y-3">
+                  <div className="max-h-64 overflow-y-auto space-y-2 p-2 bg-gray-900 rounded-lg">
+                    {orphanAnalysis.orphans.map((orphan) => (
+                      <div
+                        key={orphan.id}
+                        className="flex items-center justify-between p-3 bg-gray-800 rounded border border-gray-700"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className="text-white font-medium truncate">{orphan.title || 'Sans titre'}</div>
+                          <div className="text-sm text-gray-500 truncate">{orphan.filename}</div>
+                          {orphan.tags.length > 0 && (
+                            <div className="flex gap-1 mt-1">
+                              {orphan.tags.slice(0, 3).map((tag, i) => (
+                                <span key={i} className="text-xs px-2 py-0.5 bg-rose-500/20 text-rose-300 rounded">
+                                  {tag}
+                                </span>
+                              ))}
+                              {orphan.tags.length > 3 && (
+                                <span className="text-xs text-gray-500">+{orphan.tags.length - 3}</span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <button
+                    onClick={cleanupOrphans}
+                    disabled={orphanCleaning}
+                    className="w-full px-6 py-3 bg-red-500 text-white rounded-lg hover:bg-red-600 disabled:bg-gray-700 disabled:text-gray-500 flex items-center justify-center gap-2 transition-colors font-semibold"
+                  >
+                    {orphanCleaning ? (
+                      <>
+                        <Loader className="w-5 h-5 animate-spin" />
+                        Suppression en cours...
+                      </>
+                    ) : (
+                      <>
+                        <Trash2 className="w-5 h-5" />
+                        Supprimer les {orphanAnalysis.orphans.length} image(s) orpheline(s)
+                      </>
+                    )}
+                  </button>
+                </div>
+              )}
+
+              {orphanAnalysis.orphans.length === 0 && (
+                <div className="text-center py-6">
+                  <CheckCircle className="w-12 h-12 text-green-400 mx-auto mb-2" />
+                  <p className="text-green-400 font-medium">Aucune image orpheline détectée</p>
+                  <p className="text-gray-500 text-sm">Toutes vos entrées correspondent à des fichiers existants</p>
+                </div>
+              )}
+            </>
+          )}
+        </div>
 
         {/* Stats */}
         {analysis && (

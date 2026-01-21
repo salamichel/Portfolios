@@ -235,6 +235,46 @@ export const duplicatesApi = {
     api.delete<{ success: boolean; message: string }>(`/cleanup/duplicates/${imageId}`).then(res => res.data)
 };
 
+// Orphans API
+export interface OrphanImage {
+  id: string;
+  filename: string;
+  title: string;
+  created_at: string;
+  theme_id: string | null;
+  tags: string[];
+  mood: string | null;
+}
+
+export interface OrphanAnalysisResponse {
+  orphans: OrphanImage[];
+  stats: {
+    totalImages: number;
+    orphanedImages: number;
+    percentageOrphaned: string;
+  };
+}
+
+export interface OrphanCleanupResponse {
+  success: boolean;
+  stats: {
+    totalImagesChecked: number;
+    orphansDeleted: number;
+  };
+  deletedImages: Array<{
+    id: string;
+    filename: string;
+    title: string;
+  }>;
+  message: string;
+}
+
+export const orphansApi = {
+  analyze: () => api.get<OrphanAnalysisResponse>('/cleanup/orphans/analyze').then(res => res.data),
+
+  cleanup: () => api.post<OrphanCleanupResponse>('/cleanup/orphans/cleanup').then(res => res.data)
+};
+
 // Enrichment Configs API
 export const enrichmentConfigsApi = {
   getAll: () => api.get<EnrichmentConfig[]>('/enrichment-configs').then(res => res.data),

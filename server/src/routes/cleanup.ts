@@ -354,4 +354,95 @@ router.delete('/duplicates/:imageId', async (req, res) => {
   }
 });
 
+// Find orphaned images (DB entries without physical files)
+router.get('/orphans/analyze', async (req, res) => {
+  try {
+    console.log('[Orphans] Starting orphaned images analysis...');
+
+    const allImages = imageDb.getAll({ limit: 10000 }).images;
+    const orphans: any[] = [];
+
+    for (const image of allImages) {
+      const filePath = path.join(uploadsDir, image.filename);
+
+      // Check if primary file exists
+      if (!fs.existsSync(filePath)) {
+        orphans.push({
+          id: image.id,
+          filename: image.filename,
+          title: image.title,
+          created_at: image.created_at,
+          theme_id: image.theme_id,
+          tags: image.tags ? JSON.parse(image.tags) : [],
+          mood: image.mood
+        });
+      }
+    }
+
+    const stats = {
+      totalImages: allImages.length,
+      orphanedImages: orphans.length,
+      percentageOrphaned: ((orphans.length / allImages.length) * 100).toFixed(2)
+    };
+
+    console.log('[Orphans] Analysis complete:', stats);
+
+    res.json({
+      orphans,
+      stats
+    });
+
+  } catch (error) {
+    console.error('Orphan analysis error:', error);
+    res.status(500).json({ error: 'Failed to analyze orphaned images' });
+  }
+});
+
+// Delete orphaned images from database
+router.post('/orphans/cleanup', async (req, res) => {
+  try {
+    console.log('[Orphans] Starting orphaned images cleanup...');
+
+    const allImages = imageDb.getAll({ limit: 10000 }).images;
+    const deletedIds: string[] = [];
+    const deletedDetails: any[] = [];
+
+    for (const image of allImages) {
+      const filePath = path.join(uploadsDir, image.filename);
+
+      // Check if primary file exists
+      if (!fs.existsSync(filePath)) {
+        // Delete from database
+        imageDb.delete(image.id);
+        deletedIds.push(image.id);
+        deletedDetails.push({
+          id: image.id,
+          filename: image.filename,
+          title: image.title
+        });
+
+        console.log(`[Orphans] Deleted orphaned image: ${image.filename}`);
+      }
+    }
+
+    const stats = {
+      totalImagesChecked: allImages.length,
+      orphansDeleted: deletedIds.length
+    };
+
+    console.log('[Orphans] Cleanup complete:', stats);
+
+    res.json({
+      success: true,
+      stats,
+      deletedImages: deletedDetails,
+      message: `Supprimé ${deletedIds.length} image(s) orpheline(s) de la base de données`
+    });
+
+  } catch (error) {
+    console.error('Orphan cleanup error:', error);
+    res.status(500).json({ error: 'Failed to cleanup orphaned images' });
+  }
+});
+
 export default router;
