@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { cleanupApi, orphansApi, type SimilarityGroup, type CleanupAnalysisResponse, type OrphanAnalysisResponse } from '../api/client';
-import { ArrowLeft, Sparkles, CheckCircle, XCircle, Loader, RefreshCw, Tag, Heart, AlertTriangle, Trash2 } from 'lucide-react';
+import { cleanupApi, orphansApi, duplicatesApi, type SimilarityGroup, type CleanupAnalysisResponse, type OrphanAnalysisResponse, type DuplicateAnalysisResponse, type DuplicateGroup } from '../api/client';
+import { ArrowLeft, Sparkles, CheckCircle, XCircle, Loader, RefreshCw, Tag, Heart, AlertTriangle, Trash2, Copy, HardDrive } from 'lucide-react';
 
 export function CleanupAdmin() {
   const [analysis, setAnalysis] = useState<CleanupAnalysisResponse | null>(null);
@@ -15,6 +15,12 @@ export function CleanupAdmin() {
   const [orphanAnalysis, setOrphanAnalysis] = useState<OrphanAnalysisResponse | null>(null);
   const [orphanLoading, setOrphanLoading] = useState(false);
   const [orphanCleaning, setOrphanCleaning] = useState(false);
+
+  // Duplicates state
+  const [duplicateAnalysis, setDuplicateAnalysis] = useState<DuplicateAnalysisResponse | null>(null);
+  const [duplicateLoading, setDuplicateLoading] = useState(false);
+  const [selectedForDeletion, setSelectedForDeletion] = useState<Set<string>>(new Set());
+  const [deletingDuplicates, setDeletingDuplicates] = useState(false);
 
   const analyzeMetadata = async () => {
     try {
@@ -138,6 +144,102 @@ export function CleanupAdmin() {
     } finally {
       setOrphanCleaning(false);
     }
+  };
+
+  // Duplicate functions
+  const analyzeDuplicates = async () => {
+    try {
+      setDuplicateLoading(true);
+      setMessage(null);
+      const result = await duplicatesApi.analyze();
+      setDuplicateAnalysis(result);
+      setSelectedForDeletion(new Set());
+
+      if (result.stats.errors > 0 && result.errors) {
+        setMessage({
+          type: 'error',
+          text: `Analyse terminée avec ${result.stats.errors} erreur(s). Consultez la console pour plus de détails.`
+        });
+      } else if (result.duplicateGroups.length > 0) {
+        setMessage({
+          type: 'success',
+          text: `${result.stats.duplicateGroups} groupe(s) de doublons détecté(s), représentant ${result.stats.totalDuplicates} image(s) en double.`
+        });
+      } else {
+        setMessage({
+          type: 'success',
+          text: 'Aucun doublon détecté. Toutes vos images sont uniques !'
+        });
+      }
+    } catch (error) {
+      console.error('Duplicate analysis failed:', error);
+      setMessage({ type: 'error', text: "Erreur lors de l'analyse des doublons." });
+    } finally {
+      setDuplicateLoading(false);
+    }
+  };
+
+  const toggleImageForDeletion = (imageId: string) => {
+    const newSet = new Set(selectedForDeletion);
+    if (newSet.has(imageId)) {
+      newSet.delete(imageId);
+    } else {
+      newSet.add(imageId);
+    }
+    setSelectedForDeletion(newSet);
+  };
+
+  const selectAllButOldest = (group: DuplicateGroup) => {
+    const newSet = new Set(selectedForDeletion);
+    // Keep the first (oldest) image, mark others for deletion
+    group.images.slice(1).forEach(img => newSet.add(img.id));
+    setSelectedForDeletion(newSet);
+  };
+
+  const deleteSelectedDuplicates = async () => {
+    if (selectedForDeletion.size === 0) return;
+
+    if (!confirm(`Êtes-vous sûr de vouloir supprimer ${selectedForDeletion.size} image(s) ?\n\nCette action supprimera les images de la base de données ET les fichiers physiques.\n\nCette action est irréversible.`)) {
+      return;
+    }
+
+    try {
+      setDeletingDuplicates(true);
+      setMessage(null);
+
+      let successCount = 0;
+      let errorCount = 0;
+
+      for (const imageId of selectedForDeletion) {
+        try {
+          await duplicatesApi.deleteImage(imageId);
+          successCount++;
+        } catch (error) {
+          console.error(`Failed to delete image ${imageId}:`, error);
+          errorCount++;
+        }
+      }
+
+      setMessage({
+        type: errorCount === 0 ? 'success' : 'error',
+        text: `${successCount} image(s) supprimée(s)${errorCount > 0 ? `, ${errorCount} erreur(s)` : ''}.`
+      });
+
+      // Refresh analysis
+      setSelectedForDeletion(new Set());
+      await analyzeDuplicates();
+    } catch (error) {
+      console.error('Delete duplicates failed:', error);
+      setMessage({ type: 'error', text: 'Erreur lors de la suppression des doublons.' });
+    } finally {
+      setDeletingDuplicates(false);
+    }
+  };
+
+  const formatFileSize = (bytes: number): string => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
   const SuggestionCard = ({
@@ -367,6 +469,185 @@ export function CleanupAdmin() {
                   <CheckCircle className="w-12 h-12 text-green-400 mx-auto mb-2" />
                   <p className="text-green-400 font-medium">Aucune image orpheline détectée</p>
                   <p className="text-gray-500 text-sm">Toutes vos entrées correspondent à des fichiers existants</p>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        {/* Duplicate Images Section */}
+        <div className="bg-gray-800 rounded-lg border border-gray-700 p-6 mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                <Copy className="w-6 h-6 text-blue-400" />
+                Images Dupliquées
+              </h2>
+              <p className="text-gray-400 text-sm mt-1">
+                Détecte les images identiques par leur contenu (hash SHA256)
+              </p>
+            </div>
+
+            <button
+              onClick={analyzeDuplicates}
+              disabled={duplicateLoading}
+              className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:bg-gray-700 disabled:text-gray-500 flex items-center gap-2 transition-colors"
+            >
+              {duplicateLoading ? (
+                <>
+                  <Loader className="w-5 h-5 animate-spin" />
+                  Analyse...
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="w-5 h-5" />
+                  Analyser
+                </>
+              )}
+            </button>
+          </div>
+
+          {duplicateAnalysis && (
+            <>
+              {/* Stats */}
+              <div className="grid grid-cols-4 gap-4 mb-4">
+                <div className="bg-gray-900 p-4 rounded-lg border border-gray-700">
+                  <div className="text-2xl font-bold text-white">{duplicateAnalysis.stats.totalImages}</div>
+                  <div className="text-sm text-gray-400">Images Total</div>
+                </div>
+                <div className="bg-gray-900 p-4 rounded-lg border border-gray-700">
+                  <div className="text-2xl font-bold text-blue-400">{duplicateAnalysis.stats.duplicateGroups}</div>
+                  <div className="text-sm text-gray-400">Groupes de Doublons</div>
+                </div>
+                <div className="bg-gray-900 p-4 rounded-lg border border-gray-700">
+                  <div className="text-2xl font-bold text-blue-400">{duplicateAnalysis.stats.totalDuplicates}</div>
+                  <div className="text-sm text-gray-400">Doublons</div>
+                </div>
+                <div className="bg-gray-900 p-4 rounded-lg border border-gray-700">
+                  <div className="text-2xl font-bold text-green-400">{formatFileSize(duplicateAnalysis.stats.potentialSpaceSaved)}</div>
+                  <div className="text-sm text-gray-400">Espace Économisable</div>
+                </div>
+              </div>
+
+              {/* Duplicate groups */}
+              {duplicateAnalysis.duplicateGroups.length > 0 && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-sm text-gray-400">
+                      {selectedForDeletion.size} image(s) sélectionnée(s) pour suppression
+                    </p>
+                  </div>
+
+                  <div className="max-h-96 overflow-y-auto space-y-4 p-2 bg-gray-900 rounded-lg">
+                    {duplicateAnalysis.duplicateGroups.map((group, groupIndex) => (
+                      <div
+                        key={group.hash}
+                        className="bg-gray-800 rounded-lg border border-gray-700 p-4"
+                      >
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center gap-2">
+                            <HardDrive className="w-4 h-4 text-blue-400" />
+                            <span className="text-white font-semibold">
+                              Groupe {groupIndex + 1} - {group.count} copies identiques
+                            </span>
+                            <span className="text-xs text-gray-500">
+                              ({formatFileSize(group.totalSize)} total)
+                            </span>
+                          </div>
+                          <button
+                            onClick={() => selectAllButOldest(group)}
+                            className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
+                          >
+                            Sélectionner les plus récentes
+                          </button>
+                        </div>
+
+                        <div className="space-y-2">
+                          {group.images.map((image, index) => (
+                            <div
+                              key={image.id}
+                              className={`flex items-center gap-3 p-3 rounded border transition-all cursor-pointer ${
+                                selectedForDeletion.has(image.id)
+                                  ? 'border-red-500 bg-red-500/10'
+                                  : 'border-gray-700 hover:border-gray-600'
+                              }`}
+                              onClick={() => toggleImageForDeletion(image.id)}
+                            >
+                              <div className="flex items-center justify-center w-8 h-8 rounded border border-gray-600">
+                                {selectedForDeletion.has(image.id) ? (
+                                  <CheckCircle className="w-5 h-5 text-red-400" />
+                                ) : (
+                                  <div className="w-5 h-5 border-2 border-gray-600 rounded" />
+                                )}
+                              </div>
+
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-white font-medium truncate">{image.title || 'Sans titre'}</span>
+                                  {index === 0 && (
+                                    <span className="text-xs px-2 py-0.5 bg-green-500/20 text-green-300 rounded">
+                                      Plus ancienne
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="text-sm text-gray-500 truncate">{image.filename}</div>
+                                <div className="flex items-center gap-2 mt-1">
+                                  <span className="text-xs text-gray-500">
+                                    {new Date(image.upload_date).toLocaleDateString('fr-FR')}
+                                  </span>
+                                  <span className="text-xs text-gray-500">•</span>
+                                  <span className="text-xs text-gray-500">{formatFileSize(image.fileSize)}</span>
+                                  {image.tags.length > 0 && (
+                                    <>
+                                      <span className="text-xs text-gray-500">•</span>
+                                      <div className="flex gap-1">
+                                        {image.tags.slice(0, 2).map((tag, i) => (
+                                          <span key={i} className="text-xs px-1.5 py-0.5 bg-rose-500/20 text-rose-300 rounded">
+                                            {tag}
+                                          </span>
+                                        ))}
+                                        {image.tags.length > 2 && (
+                                          <span className="text-xs text-gray-500">+{image.tags.length - 2}</span>
+                                        )}
+                                      </div>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {selectedForDeletion.size > 0 && (
+                    <button
+                      onClick={deleteSelectedDuplicates}
+                      disabled={deletingDuplicates}
+                      className="w-full px-6 py-3 bg-red-500 text-white rounded-lg hover:bg-red-600 disabled:bg-gray-700 disabled:text-gray-500 flex items-center justify-center gap-2 transition-colors font-semibold"
+                    >
+                      {deletingDuplicates ? (
+                        <>
+                          <Loader className="w-5 h-5 animate-spin" />
+                          Suppression en cours...
+                        </>
+                      ) : (
+                        <>
+                          <Trash2 className="w-5 h-5" />
+                          Supprimer les {selectedForDeletion.size} image(s) sélectionnée(s)
+                        </>
+                      )}
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {duplicateAnalysis.duplicateGroups.length === 0 && (
+                <div className="text-center py-6">
+                  <CheckCircle className="w-12 h-12 text-green-400 mx-auto mb-2" />
+                  <p className="text-green-400 font-medium">Aucun doublon détecté</p>
+                  <p className="text-gray-500 text-sm">Toutes vos images sont uniques</p>
                 </div>
               )}
             </>
