@@ -197,6 +197,44 @@ export const cleanupApi = {
     api.post<{ success: boolean; results: any; message: string }>('/cleanup/apply-suggestions', { tagMerges, moodMerges }).then(res => res.data)
 };
 
+// Duplicates API
+export interface DuplicateImage {
+  id: string;
+  filename: string;
+  title: string;
+  upload_date: string;
+  theme_id: string | null;
+  tags: string[];
+  mood: string | null;
+  fileSize: number;
+}
+
+export interface DuplicateGroup {
+  hash: string;
+  count: number;
+  images: DuplicateImage[];
+  totalSize: number;
+}
+
+export interface DuplicateAnalysisResponse {
+  duplicateGroups: DuplicateGroup[];
+  stats: {
+    totalImages: number;
+    duplicateGroups: number;
+    totalDuplicates: number;
+    potentialSpaceSaved: number;
+    errors: number;
+  };
+  errors?: string[];
+}
+
+export const duplicatesApi = {
+  analyze: () => api.get<DuplicateAnalysisResponse>('/cleanup/duplicates/analyze').then(res => res.data),
+
+  deleteImage: (imageId: string) =>
+    api.delete<{ success: boolean; message: string }>(`/cleanup/duplicates/${imageId}`).then(res => res.data)
+};
+
 // Enrichment Configs API
 export const enrichmentConfigsApi = {
   getAll: () => api.get<EnrichmentConfig[]>('/enrichment-configs').then(res => res.data),

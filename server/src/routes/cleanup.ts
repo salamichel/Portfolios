@@ -1,8 +1,15 @@
 import express from 'express';
+import crypto from 'crypto';
+import fs from 'fs';
+import path from 'path';
 import { imageDb } from '../database.js';
 import { analyzeSimilarMetadata } from '../services/gemini.js';
 
 const router = express.Router();
+
+// Base directory for file access
+const BASE_DIR = process.env.BASE_DIR || process.cwd();
+const uploadsDir = path.join(BASE_DIR, 'uploads');
 
 // Get AI-powered cleanup suggestions
 router.post('/analyze', async (req, res) => {
@@ -214,6 +221,136 @@ router.post('/fix-duplicate-tags', async (req, res) => {
   } catch (error) {
     console.error('Fix duplicates error:', error);
     res.status(500).json({ error: 'Failed to fix duplicate tags' });
+  }
+});
+
+// Calculate file hash for duplicate detection
+function calculateFileHash(filePath: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const hash = crypto.createHash('sha256');
+    const stream = fs.createReadStream(filePath);
+
+    stream.on('data', (data) => hash.update(data));
+    stream.on('end', () => resolve(hash.digest('hex')));
+    stream.on('error', reject);
+  });
+}
+
+// Analyze duplicate images by file hash
+router.get('/duplicates/analyze', async (req, res) => {
+  try {
+    console.log('[Duplicates] Starting duplicate image analysis...');
+
+    const allImages = imageDb.getAll({ limit: 10000 }).images;
+    const hashMap = new Map<string, any[]>();
+    const errors: string[] = [];
+
+    // Calculate hash for each image
+    for (const image of allImages) {
+      try {
+        const filePath = path.join(uploadsDir, image.filename);
+
+        // Check if file exists
+        if (!fs.existsSync(filePath)) {
+          errors.push(`File not found: ${image.filename}`);
+          continue;
+        }
+
+        const hash = await calculateFileHash(filePath);
+
+        // Group images by hash
+        if (!hashMap.has(hash)) {
+          hashMap.set(hash, []);
+        }
+
+        hashMap.get(hash)!.push({
+          id: image.id,
+          filename: image.filename,
+          title: image.title,
+          upload_date: image.upload_date,
+          theme_id: image.theme_id,
+          tags: image.tags ? JSON.parse(image.tags) : [],
+          mood: image.mood,
+          fileSize: fs.statSync(filePath).size
+        });
+
+      } catch (error) {
+        console.error(`Error processing image ${image.id}:`, error);
+        errors.push(`Error with ${image.filename}: ${error}`);
+      }
+    }
+
+    // Filter to only groups with duplicates (more than 1 image)
+    const duplicateGroups = Array.from(hashMap.entries())
+      .filter(([hash, images]) => images.length > 1)
+      .map(([hash, images]) => ({
+        hash,
+        count: images.length,
+        images: images.sort((a, b) =>
+          new Date(a.upload_date).getTime() - new Date(b.upload_date).getTime()
+        ),
+        totalSize: images.reduce((sum, img) => sum + img.fileSize, 0)
+      }))
+      .sort((a, b) => b.count - a.count); // Sort by number of duplicates
+
+    const stats = {
+      totalImages: allImages.length,
+      duplicateGroups: duplicateGroups.length,
+      totalDuplicates: duplicateGroups.reduce((sum, group) => sum + (group.count - 1), 0),
+      potentialSpaceSaved: duplicateGroups.reduce(
+        (sum, group) => sum + (group.totalSize - (group.totalSize / group.count)),
+        0
+      ),
+      errors: errors.length
+    };
+
+    console.log('[Duplicates] Analysis complete:', stats);
+
+    res.json({
+      duplicateGroups,
+      stats,
+      errors: errors.length > 0 ? errors : undefined
+    });
+
+  } catch (error) {
+    console.error('Duplicate analysis error:', error);
+    res.status(500).json({ error: 'Failed to analyze duplicates' });
+  }
+});
+
+// Delete specific image (for duplicate cleanup)
+router.delete('/duplicates/:imageId', async (req, res) => {
+  try {
+    const { imageId } = req.params;
+
+    const image = imageDb.getById(imageId);
+    if (!image) {
+      return res.status(404).json({ error: 'Image not found' });
+    }
+
+    // Delete from database
+    imageDb.delete(imageId);
+
+    // Delete files
+    const filePath = path.join(uploadsDir, image.filename);
+    const thumbnailPath = path.join(uploadsDir, 'thumbnails', `thumb_${image.filename}`);
+    const mediumPath = path.join(uploadsDir, 'medium', `medium_${image.filename}`);
+    const optimizedPath = path.join(uploadsDir, 'optimized', `opt_${image.filename}`);
+
+    [filePath, thumbnailPath, mediumPath, optimizedPath].forEach(p => {
+      if (fs.existsSync(p)) {
+        fs.unlinkSync(p);
+      }
+    });
+
+    res.json({
+      success: true,
+      message: `Image ${imageId} deleted successfully`
+    });
+
+  } catch (error) {
+    console.error('Delete image error:', error);
+    res.status(500).json({ error: 'Failed to delete image' });
   }
 });
 
