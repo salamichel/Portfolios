@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { bookDb, bookPageDb, imageDb, templateDb, processingReportDb } from '../database.js';
 import { suggestBookLayout } from '../services/bookLayoutAI.js';
+import { generateBookPdf, getPdfPath, pdfExists, listBookPdfs, deletePdf, PDF_FORMATS, type PdfFormat, type PageMode } from '../services/pdfGenerator.js';
 
 const router = Router();
 
@@ -308,6 +309,111 @@ router.get('/:bookId/reports/:reportId', (req, res) => {
   } catch (error) {
     console.error('Failed to get processing report:', error);
     res.status(500).json({ error: 'Failed to get processing report' });
+  }
+});
+
+// === PDF Export ===
+
+// Get available PDF formats
+router.get('/pdf-formats', (req, res) => {
+  const formats = Object.entries(PDF_FORMATS).map(([key, config]) => ({
+    id: key,
+    name: config.name,
+    pageWidthCm: config.pageWidthCm,
+    pageHeightCm: config.pageHeightCm,
+  }));
+  res.json(formats);
+});
+
+// Generate PDF for a book
+router.post('/:id/export-pdf', async (req, res) => {
+  try {
+    const { format, pageMode = 'spread' } = req.body;
+
+    if (!format || !['landscape', 'portrait'].includes(format)) {
+      return res.status(400).json({ error: 'Invalid format. Must be "landscape" or "portrait"' });
+    }
+
+    if (!['spread', 'single'].includes(pageMode)) {
+      return res.status(400).json({ error: 'Invalid pageMode. Must be "spread" or "single"' });
+    }
+
+    const book = bookDb.getById(req.params.id);
+    if (!book) {
+      return res.status(404).json({ error: 'Book not found' });
+    }
+
+    const pages = bookPageDb.getByBook(req.params.id);
+    if (pages.length === 0) {
+      return res.status(400).json({ error: 'Book has no pages' });
+    }
+
+    const result = await generateBookPdf({
+      book,
+      pages,
+      format: format as PdfFormat,
+      pageMode: pageMode as PageMode,
+    });
+
+    res.json({
+      success: true,
+      filename: result.filename,
+      size: result.size,
+      downloadUrl: `/api/books/${req.params.id}/pdf/${result.filename}`,
+    });
+  } catch (error) {
+    console.error('PDF generation error:', error);
+    res.status(500).json({ error: 'Failed to generate PDF' });
+  }
+});
+
+// Download a generated PDF
+router.get('/:id/pdf/:filename', (req, res) => {
+  try {
+    const { filename } = req.params;
+
+    if (!pdfExists(filename)) {
+      return res.status(404).json({ error: 'PDF not found' });
+    }
+
+    const filepath = getPdfPath(filename);
+    res.download(filepath, filename);
+  } catch (error) {
+    console.error('PDF download error:', error);
+    res.status(500).json({ error: 'Failed to download PDF' });
+  }
+});
+
+// List available PDFs for a book
+router.get('/:id/pdfs', (req, res) => {
+  try {
+    const book = bookDb.getById(req.params.id);
+    if (!book) {
+      return res.status(404).json({ error: 'Book not found' });
+    }
+
+    const pdfs = listBookPdfs(book.name);
+    res.json(pdfs);
+  } catch (error) {
+    console.error('List PDFs error:', error);
+    res.status(500).json({ error: 'Failed to list PDFs' });
+  }
+});
+
+// Delete a generated PDF
+router.delete('/:id/pdf/:filename', (req, res) => {
+  try {
+    const { filename } = req.params;
+
+    if (!pdfExists(filename)) {
+      return res.status(404).json({ error: 'PDF not found' });
+    }
+
+    deletePdf(filename);
+    res.status(204).send();
+  } catch (error) {
+    console.error('PDF delete error:', error);
+    res.status(500).json({ error: 'Failed to delete PDF' });
   }
 });
 

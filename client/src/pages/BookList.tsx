@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, BookOpen, Trash2, Edit2, ArrowLeft, Calendar, FileText, Layout } from 'lucide-react';
+import { Plus, BookOpen, Trash2, Edit2, ArrowLeft, Calendar, FileText, Layout, FileDown } from 'lucide-react';
 import { booksApi, getThumbnailUrl } from '../api/client';
 import type { Book } from '../types';
 import TagMoodSelector from '../components/book/TagMoodSelector';
 import { BookStatusBadge } from '../components/book/BookStatusBadge';
+import { PdfExportModal } from '../components/book/PdfExportModal';
 
 export function BookList() {
   const [books, setBooks] = useState<Book[]>([]);
@@ -15,6 +16,7 @@ export function BookList() {
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [selectedMoods, setSelectedMoods] = useState<string[]>([]);
   const [creating, setCreating] = useState(false);
+  const [pdfExportBook, setPdfExportBook] = useState<Book | null>(null);
 
   const loadBooks = useCallback(async () => {
     try {
@@ -181,6 +183,15 @@ export function BookList() {
                     </Link>
 
                     <div className="flex items-center gap-1">
+                      {(book.page_count || 0) > 0 && (
+                        <button
+                          onClick={() => setPdfExportBook(book)}
+                          className="p-1.5 hover:bg-emerald-500/10 rounded-lg transition-colors"
+                          title="Exporter en PDF"
+                        >
+                          <FileDown className="w-4 h-4 text-emerald-400" />
+                        </button>
+                      )}
                       <Link
                         to={`/books/${book.id}`}
                         className="p-1.5 hover:bg-gray-700 rounded-lg transition-colors"
@@ -287,6 +298,15 @@ export function BookList() {
             </form>
           </div>
         </div>
+      )}
+
+      {/* PDF Export Modal */}
+      {pdfExportBook && (
+        <PdfExportModal
+          bookId={pdfExportBook.id}
+          bookName={pdfExportBook.name}
+          onClose={() => setPdfExportBook(null)}
+        />
       )}
     </div>
   );

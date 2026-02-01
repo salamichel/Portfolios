@@ -153,8 +153,36 @@ export const booksApi = {
     api.post<BookLayoutSuggestions>(`/books/${bookId}/suggest-layout`, { image_ids: imageIds, use_cache: useCache }).then(res => res.data),
 
   applySuggestions: (bookId: string, suggestions: LayoutSuggestion[]) =>
-    api.post<BookPage[]>(`/books/${bookId}/apply-suggestions`, { suggestions }).then(res => res.data)
+    api.post<BookPage[]>(`/books/${bookId}/apply-suggestions`, { suggestions }).then(res => res.data),
+
+  // PDF Export
+  getPdfFormats: () =>
+    api.get<PdfFormatInfo[]>('/books/pdf-formats').then(res => res.data),
+
+  exportPdf: (bookId: string, format: 'landscape' | 'portrait', pageMode: 'spread' | 'single' = 'spread') =>
+    api.post<PdfExportResult>(`/books/${bookId}/export-pdf`, { format, pageMode }).then(res => res.data),
+
+  listPdfs: (bookId: string) =>
+    api.get<string[]>(`/books/${bookId}/pdfs`).then(res => res.data),
+
+  deletePdf: (bookId: string, filename: string) =>
+    api.delete(`/books/${bookId}/pdf/${filename}`)
 };
+
+// PDF Export types
+export interface PdfFormatInfo {
+  id: 'landscape' | 'portrait';
+  name: string;
+  pageWidthCm: number;
+  pageHeightCm: number;
+}
+
+export interface PdfExportResult {
+  success: boolean;
+  filename: string;
+  size: number;
+  downloadUrl: string;
+}
 
 // Cleanup API
 export interface SimilarityGroup {

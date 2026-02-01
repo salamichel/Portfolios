@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import {
   ArrowLeft, Plus, Trash2, Wand2, ChevronLeft, ChevronRight,
-  LayoutGrid, BookOpen, Presentation, Type, Settings, Loader2, Activity
+  LayoutGrid, BookOpen, Presentation, Type, Settings, Loader2, Activity, FileDown
 } from 'lucide-react';
 import { booksApi, templatesApi, themesApi } from '../api/client';
 import type { Book, BookPage, PageTemplate, Theme, LayoutSuggestion, Image, SlotAnnotation, TextSlotData, PageSlotData } from '../types';
@@ -15,6 +15,7 @@ import { TextSlotEditor } from '../components/book/TextSlotEditor';
 import { BookSlideshow } from '../components/book/BookSlideshow';
 import { BookInfoEditor } from '../components/book/BookInfoEditor';
 import { ProcessingReportModal } from '../components/book/ProcessingReportModal';
+import { PdfExportModal } from '../components/book/PdfExportModal';
 
 export function BookEditor() {
   const { id } = useParams<{ id: string }>();
@@ -53,6 +54,9 @@ export function BookEditor() {
 
   // Processing reports
   const [showProcessingReports, setShowProcessingReports] = useState(false);
+
+  // PDF Export
+  const [showPdfExport, setShowPdfExport] = useState(false);
 
   // AI suggestions
   const [showAISuggestions, setShowAISuggestions] = useState(false);
@@ -496,6 +500,15 @@ export function BookEditor() {
                     {generatingSuggestions ? 'Génération...' : 'Réorganiser'}
                   </span>
                 </button>
+
+                <button
+                  onClick={() => setShowPdfExport(true)}
+                  className="flex items-center gap-2 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors"
+                  title="Exporter en PDF"
+                >
+                  <FileDown className="w-4 h-4" />
+                  <span className="hidden sm:inline">PDF</span>
+                </button>
               </>
             )}
 
@@ -856,6 +869,15 @@ export function BookEditor() {
           bookId={id}
           isOpen={showProcessingReports}
           onClose={() => setShowProcessingReports(false)}
+        />
+      )}
+
+      {/* PDF Export Modal */}
+      {showPdfExport && book && (
+        <PdfExportModal
+          bookId={book.id}
+          bookName={book.name}
+          onClose={() => setShowPdfExport(false)}
         />
       )}
 
